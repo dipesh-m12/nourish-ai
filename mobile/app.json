@@ -1,0 +1,55 @@
+{
+  "expo": {
+    "name": "Nourish AI",
+    "slug": "nourish-ai",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "nourishai",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "bundleIdentifier": "com.nourishai.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E1F1E6",
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "backgroundImage": "./assets/images/icon.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.nourishai.app"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#E1F1E6",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200
+        }
+      ],
+      "expo-secure-store"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "e26dbc54-3bc5-4ea8-8b71-d18f2a6a725d"
+      }
+    },
+    "owner": "dipeshmishra"
+  }
+}
