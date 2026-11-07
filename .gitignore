@@ -1,0 +1,19 @@
+# dependencies
+node_modules/
+
+# secrets (each app also ignores its own .env)
+.env
+.env.*
+!.env.example
+
+# build output
+dist/
+*.tsbuildinfo
+
+# Claude Code: personal settings stay local; shared plugin config is committed
+.claude/settings.local.json
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.log

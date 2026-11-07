@@ -1,0 +1,8 @@
+{
+  "enabledPlugins": {
+    "expo@expo-plugins": true,
+    "ui-ux-pro-max@ui-ux-pro-max-skill": true,
+    "building-react-native-apps@callstack-agent-skills": true,
+    "testing-react-native-apps@callstack-agent-skills": true
+  }
+}
