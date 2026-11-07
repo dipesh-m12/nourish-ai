@@ -1,0 +1,1 @@
+ALTER TYPE "public"."sex" ADD VALUE 'other';
