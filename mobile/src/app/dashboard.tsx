@@ -8,6 +8,7 @@ import { useMe, useSetShowAgent } from '@/api/profiles';
 import { useToday } from '@/api/today';
 import { AgentIntroSheet } from '@/components/agent/agent-intro-sheet';
 import { AskNourishTag } from '@/components/agent/ask-nourish-tag';
+import { MadeWithLove } from '@/components/dashboard/made-with-love';
 import { BurnSection } from '@/components/burn/burn-section';
 import { ConfettiBurst } from '@/components/confetti-burst';
 import { BriefingCard } from '@/components/dashboard/briefing-card';
@@ -291,6 +292,11 @@ export default function DashboardScreen() {
             />
           </View>
         )}
+
+        {/* Bleeds through the column's px-5 (20) and pb-10 (40) so the fade hits the screen edges. */}
+        <View className="mt-32">
+          <MadeWithLove bleed={{ x: 20, bottom: 40 }} />
+        </View>
       </ScrollView>
 
       <ChallengePickerSheet

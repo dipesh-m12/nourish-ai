@@ -40,9 +40,10 @@ export default function NotFoundScreen() {
         {['4', '0', '4'].map((digit, i) => (
           <Animated.View
             key={i}
-            entering={FadeInDown.delay(150 + i * 90)
-              .springify()
-              .damping(12)}
+            // Staggered 50 ms, 200 ms each: all three digits land within 0.3 s.
+            entering={FadeInDown.delay(i * 50)
+              .duration(200)
+              .easing(Easing.bezier(0.23, 1, 0.32, 1))}
           >
             <Text className="font-serif-bold text-6xl text-primary">{digit}</Text>
           </Animated.View>

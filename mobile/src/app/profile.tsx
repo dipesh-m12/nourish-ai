@@ -1,3 +1,4 @@
+import Constants from 'expo-constants';
 import { type Href, Redirect, router } from 'expo-router';
 import {
   ChevronLeft,
@@ -254,6 +255,10 @@ export default function ProfileScreen() {
             />
           </Section>
         )}
+
+        <Text className="mt-10 text-center text-xs text-muted">
+          Nourish AI · v{Constants.expoConfig?.version ?? '1.0.0'}
+        </Text>
       </ScrollView>
 
       <FeedbackSheet visible={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
