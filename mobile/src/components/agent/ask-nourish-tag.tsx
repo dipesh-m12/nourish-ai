@@ -54,7 +54,7 @@ export function AskNourishTag({ bottom }: { bottom: number }) {
   return (
     <Animated.View
       entering={FadeInRight.duration(450).delay(200)}
-      className="absolute right-0"
+      className="absolute right-3"
       style={{ bottom }}
     >
       <Animated.View style={style}>
@@ -65,7 +65,7 @@ export function AskNourishTag({ bottom }: { bottom: number }) {
           }}
           accessibilityRole="button"
           accessibilityLabel="Ask Nourish, your assistant"
-          className="flex-row items-center gap-2 rounded-l-full bg-ink py-1.5 pl-1.5 pr-4 shadow-lg"
+          className="flex-row items-center gap-2.5 rounded-full bg-ink py-2 pl-3 pr-4 shadow-lg"
           style={{ elevation: 6 }}
         >
           <AgentLottie size={40} round />
