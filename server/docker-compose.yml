@@ -1,0 +1,41 @@
+# Nourish AI: the API server and its own Redis, together.
+#   cd server && docker compose up -d --build      (-d: keeps running after you log out)
+# Nginx on the host forwards https://api.nourish.mavinash.in to 127.0.0.1:4000.
+# Secrets: server/.env.production, created ON THE SERVER ONLY (git-ignored), never in this file.
+
+name: nourish
+
+services:
+  server:
+    build: .
+    image: nourish-server:latest
+    env_file: .env.production
+    environment:
+      # Use the Redis container below (not any Redis on the machine).
+      REDIS_HOST: redis
+      REDIS_PORT: '6379'
+      NODE_ENV: production
+    ports:
+      # Localhost only: nginx on this machine can reach it, the internet can't.
+      - '127.0.0.1:4000:4000'
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options: { max-size: '10m', max-file: '3' }
+
+  redis:
+    image: redis:7-alpine
+    # Only short-lived checkout locks live here: no disk persistence. noeviction = a full Redis
+    # refuses writes (checkout says "try again") instead of silently dropping a lock.
+    command:
+      ['redis-server', '--save', '', '--appendonly', 'no', '--maxmemory', '64mb', '--maxmemory-policy', 'noeviction']
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    # No ports published: reachable only by the server container.
