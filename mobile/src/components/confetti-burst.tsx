@@ -1,7 +1,10 @@
 import LottieView from 'lottie-react-native';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
+
+/** Slightly longer than the animation (241 frames at 60 fps ≈ 4 s). */
+const MAX_MS = 5000;
 
 /**
  * One-shot celebration: confetti shoots up from the bottom, peaks, and drifts down (~4 s),
@@ -12,9 +15,22 @@ import { useReducedMotion } from 'react-native-reanimated';
 export function ConfettiBurst({ onFinish }: { onFinish?: () => void }) {
   const reduceMotion = useReducedMotion();
   const [done, setDone] = useState(false);
+  const lottie = useRef<LottieView>(null);
+  const started = useRef(false);
+
+  const finish = () => {
+    setDone(true);
+    onFinish?.();
+  };
 
   useEffect(() => {
-    if (reduceMotion) onFinish?.();
+    if (reduceMotion) {
+      onFinish?.();
+      return;
+    }
+    // Safety net: if the finish event never arrives, don't leave an invisible overlay behind.
+    const timer = setTimeout(finish, MAX_MS);
+    return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reduceMotion]);
 
@@ -29,13 +45,20 @@ export function ConfettiBurst({ onFinish }: { onFinish?: () => void }) {
       importantForAccessibility="no-hide-descendants"
     >
       <LottieView
+        ref={lottie}
         source={require('@/assets/lottie/confetti.json')}
-        autoPlay
+        // Started by hand once laid out: autoPlay can silently not start when the view mounts
+        // during a screen transition (lottie-react-native 7, new architecture).
+        autoPlay={false}
         loop={false}
         resizeMode="cover"
-        onAnimationFinish={() => {
-          setDone(true);
-          onFinish?.();
+        onLayout={() => {
+          if (started.current) return;
+          started.current = true;
+          lottie.current?.play();
+        }}
+        onAnimationFinish={(cancelled) => {
+          if (!cancelled) finish();
         }}
         style={StyleSheet.absoluteFill}
       />
