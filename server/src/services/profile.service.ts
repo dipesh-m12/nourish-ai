@@ -176,6 +176,9 @@ export const profileService = {
     if (!row) throw AppError.notFound('Profile');
 
     const preferences = { ...row.preferences };
+    if (input.assistantIntroSeen !== undefined) {
+      preferences.assistantIntroSeen = input.assistantIntroSeen;
+    }
     if (input.companion) {
       const current = preferences.companion;
       // Adopting (again) is a fresh start: a new date and no "left".

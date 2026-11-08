@@ -20,3 +20,6 @@ Thumbs.db
 
 # Source art for the companion cat (1 MB PNGs). The app ships the cleaned 35 KB WebPs.
 mobile/assets/images/cat/*.png
+
+# Source art for the assistant intro slides (1-2 MB PNGs). The app ships the 60-100 KB WebPs in images/chat.
+mobile/assets/images/chatai/

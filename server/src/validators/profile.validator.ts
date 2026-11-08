@@ -22,10 +22,15 @@ export const preferencesSchema = z
         introSeen: z.boolean().optional(),
       })
       .optional(),
+    assistantIntroSeen: z.boolean().optional(),
   })
-  .refine((v) => v.showAgent !== undefined || v.companion !== undefined, {
-    message: 'Nothing to update',
-  });
+  .refine(
+    (v) =>
+      v.showAgent !== undefined || v.companion !== undefined || v.assistantIntroSeen !== undefined,
+    {
+      message: 'Nothing to update',
+    },
+  );
 
 export type PreferencesInput = z.infer<typeof preferencesSchema>;
 

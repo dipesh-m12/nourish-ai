@@ -43,6 +43,8 @@ export interface CompanionPrefs {
 
 export interface Preferences {
   companion?: CompanionPrefs;
+  /** Saw the assistant's how-it-works slides (shown once, on first opening the chat). */
+  assistantIntroSeen?: boolean;
 }
 
 // A profile is the user's identity (no login). Body details are filled during onboarding.

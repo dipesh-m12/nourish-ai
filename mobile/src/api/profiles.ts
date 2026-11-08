@@ -111,6 +111,16 @@ export function useSetShowAgent() {
   });
 }
 
+/** The assistant's intro slides were seen (or skipped): never show them again. */
+export function useMarkAssistantIntroSeen() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      request<Profile>('/me/preferences', { method: 'PUT', body: { assistantIntroSeen: true } }),
+    onSuccess: (profile) => queryClient.setQueryData(queryKeys.me, profile),
+  });
+}
+
 /**
  * The companion cat: adopt / decline, and "saw the slides". Refreshes `today` so her mood and
  * the dashboard spot update straight away.

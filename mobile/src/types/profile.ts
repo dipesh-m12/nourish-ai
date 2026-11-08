@@ -17,6 +17,11 @@ export interface ProfileSummary {
   club: boolean;
   /** Assistant on the dashboard: null = never asked (show the intro). */
   showAgent: boolean | null;
+  /** Flexible per-profile settings (the server merges updates). */
+  preferences: {
+    /** Saw the assistant's how-it-works slides. */
+    assistantIntroSeen?: boolean;
+  };
   onboarded: boolean;
 }
 

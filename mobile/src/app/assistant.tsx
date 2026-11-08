@@ -12,7 +12,9 @@ import {
   type ConfirmInput,
 } from '@/api/agent';
 import { useSubscription } from '@/api/subscription';
+import { useMarkAssistantIntroSeen, useMe } from '@/api/profiles';
 import { ActionCard } from '@/components/agent/action-card';
+import { AssistantIntro } from '@/components/agent/assistant-intro';
 import { AgentLottie } from '@/components/agent/agent-lottie';
 import { AskInput } from '@/components/agent/ask-input';
 import { ChallengeTools } from '@/components/agent/challenge-tools';
@@ -39,6 +41,11 @@ export default function AssistantScreen() {
   const insets = useSafeAreaInsets();
   const toast = useToast((s) => s.show);
   const thread = useAgentThread(date);
+  // First visit: the how-it-works slides, once (saved on the profile).
+  const { data: me } = useMe();
+  const markIntroSeen = useMarkAssistantIntroSeen();
+  const [introDone, setIntroDone] = useState(false);
+  const showIntro = Boolean(me && !me.preferences?.assistantIntroSeen && !introDone);
   const send = useSendAgentMessage(date);
   const confirm = useConfirmAgentAction(date);
   const cancel = useCancelAgentAction(date);
@@ -89,10 +96,11 @@ export default function AssistantScreen() {
   const promptSent = useRef(false);
   const { mutate: sendMessage } = send; // stable across renders, unlike submit()
   useEffect(() => {
-    if (!prompt || promptSent.current || !thread.isSuccess) return;
+    // Held until the intro is finished, so it isn't sent behind the slides.
+    if (!prompt || promptSent.current || !thread.isSuccess || showIntro) return;
     promptSent.current = true;
     sendMessage(prompt, { onError: sendFailed });
-  }, [prompt, thread.isSuccess, sendMessage, sendFailed]);
+  }, [prompt, thread.isSuccess, showIntro, sendMessage, sendFailed]);
 
   const scrollToEnd = () =>
     requestAnimationFrame(() => list.current?.scrollToEnd({ animated: true }));
@@ -114,6 +122,17 @@ export default function AssistantScreen() {
     );
   };
 
+  if (showIntro) {
+    return (
+      <AssistantIntro
+        saving={markIntroSeen.isPending}
+        onDone={() => {
+          setIntroDone(true); // show the chat now; the save happens in the background
+          markIntroSeen.mutate();
+        }}
+      />
+    );
+  }
   return (
     <SafeAreaView className="flex-1 bg-bg" edges={['top']}>
       <View className="flex-row items-center gap-3 border-b border-line px-4 py-2">
