@@ -1,9 +1,11 @@
+import { randomUUID } from 'node:crypto';
 import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '../db';
 import { goals, profiles, type Goal, type Profile } from '../db/schema';
 import { AppError } from '../utils/app-error';
 import type { CreateProfileInput, OnboardingInput } from '../validators/profile.validator';
 import { calculateDailyTargets } from './nutrition.service';
+import { storageService } from './storage.service';
 
 // Soft, distinct colours for profile avatars on the picker screen.
 const AVATAR_COLORS = ['#1F7A55', '#E07A5F', '#3D7DD8', '#B5838D', '#D99A2B', '#6A8D73'];
@@ -20,10 +22,19 @@ function isUniqueViolation(err: unknown): boolean {
   return e?.code === '23505' || e?.cause?.code === '23505';
 }
 
-function toProfileResponse(profile: Profile, goal?: Goal | null) {
-  const { deletedAt: _internal, ...visible } = profile;
+/**
+ * The photo as the app sees it: a short-lived signed URL (the only way to read it) plus the
+ * stable key, which the app uses as its image cache key since the URL changes every request.
+ */
+async function avatarOf(avatarKey: string | null) {
+  return { avatarKey, avatarUrl: avatarKey ? await storageService.signedReadUrl(avatarKey) : null };
+}
+
+async function toProfileResponse(profile: Profile, goal?: Goal | null) {
+  const { deletedAt: _internal, avatarKey, ...visible } = profile;
   return {
     ...visible,
+    ...(await avatarOf(avatarKey)),
     onboarded: profile.onboardedAt !== null,
     goal: goal ?? null,
   };
@@ -36,12 +47,19 @@ export const profileService = {
         id: profiles.id,
         name: profiles.name,
         avatarColor: profiles.avatarColor,
+        avatarKey: profiles.avatarKey,
         onboardedAt: profiles.onboardedAt,
       })
       .from(profiles)
       .where(active)
       .orderBy(asc(profiles.createdAt));
-    return rows.map(({ onboardedAt, ...p }) => ({ ...p, onboarded: onboardedAt !== null }));
+    return Promise.all(
+      rows.map(async ({ onboardedAt, avatarKey, ...p }) => ({
+        ...p,
+        ...(await avatarOf(avatarKey)),
+        onboarded: onboardedAt !== null,
+      })),
+    );
   },
 
   /** Case-insensitive among active profiles, matching the partial unique index on lower(name). */
@@ -106,6 +124,37 @@ export const profileService = {
    * Soft delete: the profile disappears everywhere (list, sign-in, name check) and its tokens
    * stop working, because requireAuth checks `exists`. Data stays for recovery or audits.
    */
+  /** Uploads a new photo under a fresh key, points the profile at it, then deletes the old one. */
+  async setAvatar(id: string, image: Buffer, mimeType: string) {
+    const ext = mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg';
+    const key = `avatars/${id}/${randomUUID()}.${ext}`;
+    await storageService.put(key, image, mimeType);
+
+    const [before] = await db
+      .select({ key: profiles.avatarKey })
+      .from(profiles)
+      .where(eq(profiles.id, id));
+    await db
+      .update(profiles)
+      .set({ avatarKey: key })
+      .where(and(eq(profiles.id, id), active));
+    if (before?.key) await storageService.remove(before.key);
+    return this.getById(id);
+  },
+
+  async removeAvatar(id: string) {
+    const [before] = await db
+      .select({ key: profiles.avatarKey })
+      .from(profiles)
+      .where(eq(profiles.id, id));
+    await db
+      .update(profiles)
+      .set({ avatarKey: null })
+      .where(and(eq(profiles.id, id), active));
+    if (before?.key) await storageService.remove(before.key);
+    return this.getById(id);
+  },
+
   async softDelete(id: string) {
     const [row] = await db
       .update(profiles)

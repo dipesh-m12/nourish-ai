@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { authedProfileId } from '../middlewares/auth';
 import { profileService } from '../services/profile.service';
 import { AppError } from '../utils/app-error';
+import { type AvatarUploadInput, looksLikeImage } from '../validators/avatar.validator';
 import { nameQuerySchema } from '../validators/profile.validator';
 
 // Controllers only translate HTTP <-> service calls. Express 5 forwards async errors automatically.
@@ -27,6 +28,20 @@ export const profileController = {
 
   async completeOnboarding(req: Request, res: Response) {
     res.json(await profileService.completeOnboarding(authedProfileId(req), req.body));
+  },
+
+  /** Replaces the profile photo. Body is validated by avatarUploadSchema in the route. */
+  async uploadAvatar(req: Request, res: Response) {
+    const { image } = req.body as AvatarUploadInput;
+    const bytes = Buffer.from(image.base64, 'base64');
+    if (!looksLikeImage(bytes, image.mimeType)) {
+      throw new AppError(400, 'That file is not a valid image');
+    }
+    res.json(await profileService.setAvatar(authedProfileId(req), bytes, image.mimeType));
+  },
+
+  async removeAvatar(req: Request, res: Response) {
+    res.json(await profileService.removeAvatar(authedProfileId(req)));
   },
 
   /** Deletes (soft) the signed-in account. The app signs out right after. */
