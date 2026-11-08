@@ -2,9 +2,11 @@ import { Redirect, router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import Animated, { FadeInDown, LinearTransition } from 'react-native-reanimated';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useMe } from '@/api/profiles';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useMe, useSetShowAgent } from '@/api/profiles';
 import { useToday } from '@/api/today';
+import { AgentIntroSheet } from '@/components/agent/agent-intro-sheet';
+import { AskNourishTag } from '@/components/agent/ask-nourish-tag';
 import { BurnSection } from '@/components/burn/burn-section';
 import { CalorieCard } from '@/components/dashboard/calorie-card';
 import { ChallengeCard } from '@/components/dashboard/challenge-card';
@@ -21,8 +23,12 @@ import { WhyCard } from '@/components/why-card';
 import { colors } from '@/constants/colors';
 import { useOnboarding } from '@/store/onboarding';
 import { useSession } from '@/store/session';
+import { useToast } from '@/store/toast';
 import type { TodayChallenge } from '@/types/today';
 import { localDate } from '@/utils/date';
+
+/** Pause after the dashboard settles before introducing the assistant. */
+const INTRO_DELAY_MS = 1500;
 
 function greeting() {
   const h = new Date().getHours();
@@ -49,6 +55,28 @@ export default function DashboardScreen() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [proofFor, setProofFor] = useState<TodayChallenge | null>(null);
   const [mealFor, setMealFor] = useState<MealSheetRequest | null>(null);
+  const [introOpen, setIntroOpen] = useState(false);
+  const setShowAgent = useSetShowAgent();
+  const toast = useToast((s) => s.show);
+  const insets = useSafeAreaInsets();
+
+  // Meet the assistant once: only after the whole day has loaded and settled, so it never
+  // covers a half-drawn dashboard. null = never asked.
+  const askAboutAgent = profile?.showAgent === null && today.isSuccess && !today.isFetching;
+  useEffect(() => {
+    if (!askAboutAgent) return;
+    const timer = setTimeout(() => setIntroOpen(true), INTRO_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [askAboutAgent]);
+
+  const answerIntro = (show: boolean) =>
+    setShowAgent.mutate(show, {
+      onSuccess: () => {
+        setIntroOpen(false);
+        toast(show ? 'Nourish is on your dashboard' : 'You can add Nourish from Profile anytime');
+      },
+      onError: (err) => toast(err.message),
+    });
 
   // Food challenges log through the meal flow, so one photo moves calories AND the challenge.
   const logChallenge = (c: TodayChallenge) =>
@@ -242,6 +270,14 @@ export default function DashboardScreen() {
       />
       <ProofSheet challenge={proofFor} date={date} onClose={() => setProofFor(null)} />
       <MealSheet request={mealFor} date={date} onClose={() => setMealFor(null)} />
+
+      {profile.showAgent && <AskNourishTag bottom={Math.max(insets.bottom, 12) + 20} />}
+      <AgentIntroSheet
+        visible={introOpen}
+        busy={setShowAgent.isPending}
+        onAdd={() => answerIntro(true)}
+        onLater={() => answerIntro(false)}
+      />
     </SafeAreaView>
   );
 }

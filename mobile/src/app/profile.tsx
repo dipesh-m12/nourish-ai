@@ -9,11 +9,11 @@ import {
   type LucideIcon,
 } from 'lucide-react-native';
 import { Children, type ReactNode, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Switch, View } from 'react-native';
 import Animated, { FadeInDown, ZoomIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { usePlan } from '@/api/plan';
-import { useDeleteAccount, useMe } from '@/api/profiles';
+import { useDeleteAccount, useMe, useSetShowAgent } from '@/api/profiles';
 import { AvatarSheet } from '@/components/avatar-sheet';
 import { FeedbackSheet } from '@/components/feedback-sheet';
 import { ProfileAvatar } from '@/components/profile-avatar';
@@ -42,6 +42,7 @@ export default function ProfileScreen() {
   const signOut = useSession((s) => s.signOut);
   const deleteAccount = useDeleteAccount();
   const toast = useToast((s) => s.show);
+  const setShowAgent = useSetShowAgent();
   const [pending, setPending] = useState<Pending>(null);
   const [avatarOpen, setAvatarOpen] = useState(false);
   const token = useSession((s) => s.token);
@@ -159,6 +160,21 @@ export default function ProfileScreen() {
           )}
         </Section>
 
+        <Section title="Assistant" delay={280}>
+          <ToggleRow
+            label="Show Nourish on my dashboard"
+            // Always the saved value: the switch only moves once the server confirms.
+            value={Boolean(profile.showAgent)}
+            busy={setShowAgent.isPending}
+            onChange={(v) =>
+              setShowAgent.mutate(v, {
+                onSuccess: () => toast(v ? 'Nourish is on your dashboard' : 'Nourish hidden'),
+                onError: (err) => toast(err.message),
+              })
+            }
+          />
+        </Section>
+
         <Section title="Help" delay={300}>
           <ActionRow
             icon={MessageSquareWarning}
@@ -258,6 +274,36 @@ function Row({ label, value, multiline }: { label: string; value: string; multil
           {value}
         </Text>
       )}
+    </View>
+  );
+}
+
+/** A settings row with a switch (sage when on). */
+function ToggleRow({
+  label,
+  value,
+  busy,
+  onChange,
+}: {
+  label: string;
+  value: boolean;
+  busy: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  return (
+    <View className="flex-row items-center gap-3 px-4 py-3">
+      <Text className="flex-1 font-sans-medium">{label}</Text>
+      {/* While saving: locked and greyed, like any disabled control in the app. */}
+      <Switch
+        value={value}
+        onValueChange={onChange}
+        disabled={busy}
+        trackColor={{ false: colors.line, true: busy ? colors.muted : colors.primary }}
+        thumbColor={busy ? colors.line : '#fff'}
+        style={{ opacity: busy ? 0.5 : 1 }}
+        accessibilityLabel={label}
+        accessibilityState={{ disabled: busy, checked: value }}
+      />
     </View>
   );
 }

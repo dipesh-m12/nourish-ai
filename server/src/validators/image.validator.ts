@@ -29,3 +29,5 @@ export function looksLikeImage(bytes: Buffer, mimeType: string): boolean {
       return false;
   }
 }
+
+export type ImageUpload = z.infer<typeof imageInputSchema>;

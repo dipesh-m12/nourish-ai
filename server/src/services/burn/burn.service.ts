@@ -19,9 +19,11 @@ import {
   activeKcalAt,
   activityFromChallenge,
   dayBurn,
+  MAX_SLEEP_HOURS,
   MET,
   sleepKcal,
 } from './burn.math';
+import type { ImageInput } from '../ai/llm-provider';
 
 /** Anything DB-shaped that can insert (the db itself or a transaction). */
 type Writer = Pick<typeof db, 'insert'>;
@@ -158,6 +160,47 @@ export const burnService = {
         minutes,
         calories,
         caloriesFromUser: input.calories !== undefined,
+        proofNote: verdict.note,
+      })
+      .returning();
+    return { verified: true as const, note: verdict.note, activity: toView(row!) };
+  },
+
+  /**
+   * Sleep logged without a sleep challenge (e.g. from the assistant). Same proof rule as every
+   * other log: the AI checks the photo first.
+   */
+  async logSleep(profileId: string, input: { date: string; hours: number; image: ImageInput }) {
+    const body = await bodyOf(profileId);
+    if (!body) throw new AppError(409, 'Finish onboarding before logging sleep');
+    const hours = Math.min(MAX_SLEEP_HOURS, Math.max(0.5, input.hours));
+    let verdict;
+    try {
+      verdict = await verifyProof(
+        { title: `Slept ${hours} hours`, target: `${hours} h`, frequency: 'daily' },
+        {
+          kind: 'check',
+          unit: null,
+          target: 1,
+          step: 1,
+          widget: 'check',
+          proof: 'a bed, pillow, dark bedroom, alarm or sleep-tracker screen',
+        },
+        input.image,
+      );
+    } catch {
+      throw new AppError(502, 'We couldn’t check your photo right now. Please try again.');
+    }
+    if (!verdict.verified) return { verified: false as const, note: verdict.note };
+    const minutes = hours * 60;
+    const [row] = await db
+      .insert(activities)
+      .values({
+        profileId,
+        localDate: input.date,
+        kind: 'sleep',
+        minutes,
+        calories: sleepKcal(minutes, body.kg),
         proofNote: verdict.note,
       })
       .returning();

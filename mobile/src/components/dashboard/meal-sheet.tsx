@@ -1,10 +1,10 @@
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
-import { Mic, TriangleAlert } from 'lucide-react-native';
+import { TriangleAlert } from 'lucide-react-native';
 import { useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
-import { useAnalyzeMeal, useSaveMeal, useVoiceMeal } from '@/api/meals';
+import { useAnalyzeMeal, useSaveMeal } from '@/api/meals';
 import { Button } from '@/components/ui/button';
 import { DraggableSheet } from '@/components/ui/draggable-sheet';
 import { Text } from '@/components/ui/text';
@@ -16,12 +16,10 @@ import {
   type Photo,
   type PhotoSource,
 } from '@/lib/photo';
-import type { VoiceNote } from '@/hooks/use-voice-note';
 import { useToast } from '@/store/toast';
 import type { MealAnalysis } from '@/types/meal';
 import { scaledItem, toEntry, totalsOf, type ItemEntry } from '@/utils/meal-items';
 import { MealEstimate } from './meal-estimate';
-import { VoiceButton } from './voice-button';
 
 /** Why the sheet opened: the camera on the calorie card, or "+" on a food challenge. */
 export interface MealSheetRequest {
@@ -36,12 +34,11 @@ interface Props {
 }
 
 /**
- * One way to log food, wherever it starts: a photo or a voice note → AI reads it → user fixes
- * anything wrong → save. Saving moves the calorie ring and every challenge the meal counts toward.
+ * One way to log food, wherever it starts: a photo → AI reads the plate → user fixes anything
+ * wrong → save. Saving moves the calorie ring and every challenge the meal counts toward.
  */
 export function MealSheet({ request, date, onClose }: Props) {
   const analyze = useAnalyzeMeal(date);
-  const listen = useVoiceMeal(date);
   const save = useSaveMeal(date);
   const toast = useToast((s) => s.show);
   const [photo, setPhoto] = useState<Photo | null>(null);
@@ -49,16 +46,12 @@ export function MealSheet({ request, date, onClose }: Props) {
   const [problem, setProblem] = useState<string | null>(null);
   // The plate under review: AI items (with how much was really eaten) plus anything typed in.
   const [entries, setEntries] = useState<ItemEntry[]>([]);
-  // What we heard, when the meal was said rather than snapped.
-  const [transcript, setTranscript] = useState<string | null>(null);
 
-  // Photo and voice land in the same review, so whichever answered last is the result.
-  const latest = transcript !== null ? listen.data : analyze.data;
-  const result = latest?.isFood ? latest : null;
+  const result = analyze.data?.isFood ? analyze.data : null;
   const items = entries.map(scaledItem);
   // Live: only foods still on the plate can block challenge credit.
   const warnings = [...new Set(entries.flatMap((e) => (e.warning ? [e.warning] : [])))];
-  const busy = preparing || analyze.isPending || listen.isPending;
+  const busy = preparing || analyze.isPending;
 
   const close = () => {
     if (save.isPending) return;
@@ -67,17 +60,15 @@ export function MealSheet({ request, date, onClose }: Props) {
     onClose();
   };
 
-  /** Back to the start: no photo, no voice note, no estimate. */
+  /** Back to the start: no photo, no estimate. */
   const reset = () => {
     setPhoto(null);
-    setTranscript(null);
     setProblem(null);
     setEntries([]);
     analyze.reset();
-    listen.reset();
   };
 
-  /** Shared by photo and voice: load the AI's items into the review, or explain why not. */
+  /** Load the AI's items into the review, or explain why not. */
   const review = (r: MealAnalysis) => {
     if (!r.isFood) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
@@ -86,21 +77,6 @@ export function MealSheet({ request, date, onClose }: Props) {
     }
     const warningFor = new Map(r.conflicts.map((c) => [c.item, c.message]));
     setEntries(r.items.map((i) => toEntry(i, warningFor.get(i.name) ?? null)));
-  };
-
-  const say = (note: VoiceNote) => {
-    reset();
-    setTranscript(''); // marks the voice path while it's being heard
-    listen.mutate(
-      { note, challengeId: request?.challengeId },
-      {
-        onSuccess: (r) => {
-          setTranscript(r.transcript);
-          review(r);
-        },
-        onError: (err) => setProblem(err.message),
-      },
-    );
   };
 
   const take = async (source: PhotoSource) => {
@@ -170,8 +146,8 @@ export function MealSheet({ request, date, onClose }: Props) {
             <Button
               className="mt-2"
               variant="ghost"
-              label={transcript !== null ? 'Start over' : 'Retake photo'}
-              onPress={() => (transcript !== null ? reset() : take('camera'))}
+              label="Retake photo"
+              onPress={() => take('camera')}
               disabled={save.isPending}
             />
           </>
@@ -187,20 +163,9 @@ export function MealSheet({ request, date, onClose }: Props) {
         />
       )}
 
-      {/* What we heard, quoted, so a mishearing is obvious before saving. */}
-      {transcript && !busy && (
-        <Animated.View
-          entering={FadeIn.duration(250)}
-          className="mb-4 flex-row items-start gap-2.5 rounded-2xl bg-card p-4"
-        >
-          <Mic size={16} color={colors.muted} />
-          <Text className="flex-1 italic leading-6">“{transcript}”</Text>
-        </Animated.View>
-      )}
-
-      {!photo && transcript === null && !busy && (
+      {!photo && !busy && (
         <Text className="mb-1 text-muted">
-          Snap your plate or say what you ate. We’ll count it
+          Snap your plate. We’ll count it
           {request?.challengeLabel ? ` and update ${request.challengeLabel} if it fits` : ''}.
         </Text>
       )}
@@ -213,11 +178,7 @@ export function MealSheet({ request, date, onClose }: Props) {
         >
           <ActivityIndicator color={colors.primary} />
           <Text className="text-sm text-muted">
-            {preparing
-              ? 'Preparing your photo…'
-              : listen.isPending
-                ? 'Listening and reading your meal…'
-                : 'Reading your plate…'}
+            {preparing ? 'Preparing your photo…' : 'Reading your plate…'}
           </Text>
         </Animated.View>
       )}
@@ -264,13 +225,6 @@ export function MealSheet({ request, date, onClose }: Props) {
             onPress={() => take('camera')}
           />
           <Button label="Choose from gallery" variant="secondary" onPress={() => take('library')} />
-
-          <View className="my-3 flex-row items-center gap-3">
-            <View className="h-px flex-1 bg-line" />
-            <Text className="text-xs uppercase tracking-wider text-muted">or</Text>
-            <View className="h-px flex-1 bg-line" />
-          </View>
-          <VoiceButton onNote={say} onProblem={setProblem} />
         </View>
       )}
     </DraggableSheet>

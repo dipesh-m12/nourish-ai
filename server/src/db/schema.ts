@@ -39,6 +39,8 @@ export const profiles = pgTable(
     avatarColor: text('avatar_color').notNull(),
     /** Object key of the profile photo in the private bucket. Served only via signed URLs. */
     avatarKey: text('avatar_key'),
+    /** The assistant on the dashboard: null = not asked yet (show the intro), then yes or no. */
+    showAgent: boolean('show_agent'),
     sex: sexEnum('sex'),
     age: integer('age'),
     heightCm: real('height_cm'),
@@ -296,6 +298,88 @@ export const meals = pgTable(
   (t) => [index('meals_profile_date_idx').on(t.profileId, t.localDate)],
 );
 
+// ---------- AI assistant ----------
+
+/** An inline input the assistant asks for: chips, or a number with a unit. */
+export interface AgentAsk {
+  /** photo = the app opens camera/gallery and sends the picture back. */
+  kind: 'choice' | 'number' | 'photo';
+  options?: string[];
+  unit?: string;
+  min?: number;
+  max?: number;
+  step?: number;
+  initial?: number;
+}
+
+export const agentRoleEnum = pgEnum('agent_role', ['user', 'assistant']);
+export const agentActionStatusEnum = pgEnum('agent_action_status', [
+  'proposed',
+  'confirmed',
+  'cancelled',
+  'expired',
+  'failed',
+]);
+
+// One thread per user per local day: each day opens fresh with that day's nudge.
+export const agentConversations = pgTable(
+  'agent_conversations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    profileId: uuid('profile_id')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'cascade' }),
+    localDate: date('local_date').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('agent_conversations_profile_day').on(t.profileId, t.localDate)],
+);
+
+// Something the assistant wants to do. Nothing changes until the user confirms it.
+export const agentActions = pgTable(
+  'agent_actions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    profileId: uuid('profile_id')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'cascade' }),
+    conversationId: uuid('conversation_id')
+      .notNull()
+      .references(() => agentConversations.id, { onDelete: 'cascade' }),
+    kind: text('kind').notNull(),
+    /** The card's contents (computed in code, e.g. a meal's items and kcal). */
+    payload: jsonb('payload').$type<Record<string, unknown>>().notNull(),
+    status: agentActionStatusEnum('status').notNull().default('proposed'),
+    result: jsonb('result').$type<Record<string, unknown>>(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+  },
+  (t) => [index('agent_actions_conversation_idx').on(t.conversationId)],
+);
+
+export const agentMessages = pgTable(
+  'agent_messages',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    conversationId: uuid('conversation_id')
+      .notNull()
+      .references(() => agentConversations.id, { onDelete: 'cascade' }),
+    profileId: uuid('profile_id')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'cascade' }),
+    role: agentRoleEnum('role').notNull(),
+    text: text('text').notNull(),
+    ask: jsonb('ask').$type<AgentAsk>(),
+    actionId: uuid('action_id').references(() => agentActions.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('agent_messages_conversation_idx').on(t.conversationId, t.createdAt),
+    // Counting a user's sent messages (free quota) stays cheap.
+    index('agent_messages_profile_role_idx').on(t.profileId, t.role),
+  ],
+);
+
 export type Profile = typeof profiles.$inferSelect;
 export type Goal = typeof goals.$inferSelect;
 export type Plan = typeof plans.$inferSelect;
@@ -303,4 +387,6 @@ export type Challenge = typeof challenges.$inferSelect;
 export type ChallengeLog = typeof challengeLogs.$inferSelect;
 export type Meal = typeof meals.$inferSelect;
 export type Activity = typeof activities.$inferSelect;
+export type AgentAction = typeof agentActions.$inferSelect;
+export type AgentMessage = typeof agentMessages.$inferSelect;
 export type ActivityKind = (typeof activityKindEnum.enumValues)[number];

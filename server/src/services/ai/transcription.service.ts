@@ -63,7 +63,25 @@ async function viaGemini(audio: AudioInput): Promise<string> {
   return data.transcript.trim();
 }
 
+/**
+ * Whisper "hears" stock phrases in silence or noise ("you", "thank you", "thanks for watching").
+ * Those, and anything with almost no letters, count as nothing said.
+ */
+const WHISPER_SILENCE =
+  /^(you|thank you|thanks|thanks for watching|bye|okay|ok|hmm+|uh+|um+)[.!?\s]*$/i;
+
+export function isSilence(transcript: string) {
+  const t = transcript.trim();
+  return t.replace(/[^\p{L}]/gu, '').length < 4 || WHISPER_SILENCE.test(t);
+}
+
+/** Speech to text. Returns '' when nothing meaningful was said. */
 export async function transcribe(audio: AudioInput): Promise<string> {
+  const text = await transcribeRaw(audio);
+  return isSilence(text) ? '' : text.replace(/[.\s]+$/, '');
+}
+
+async function transcribeRaw(audio: AudioInput): Promise<string> {
   try {
     return await viaGroq(audio);
   } catch (err) {

@@ -22,6 +22,9 @@ export const audioInputSchema = z.object({
 
 export type AudioInput = z.infer<typeof audioInputSchema>;
 
+/** POST /me/transcribe: one short voice note. */
+export const transcribeSchema = z.object({ audio: audioInputSchema });
+
 /** Checks the bytes really are audio of that family (container magic numbers). */
 export function looksLikeAudio(bytes: Buffer, mimeType: string): boolean {
   const ascii = (from: number, to: number) => bytes.subarray(from, to).toString('ascii');

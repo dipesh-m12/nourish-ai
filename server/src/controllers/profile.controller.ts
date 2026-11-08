@@ -40,6 +40,10 @@ export const profileController = {
     res.json(await profileService.setAvatar(authedProfileId(req), bytes, image.mimeType));
   },
 
+  async setPreferences(req: Request, res: Response) {
+    res.json(await profileService.setPreferences(authedProfileId(req), req.body));
+  },
+
   async removeAvatar(req: Request, res: Response) {
     res.json(await profileService.removeAvatar(authedProfileId(req)));
   },

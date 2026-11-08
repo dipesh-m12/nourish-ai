@@ -8,6 +8,9 @@ export const createProfileSchema = z.object({ name: nameField });
 export const nameQuerySchema = z.object({ name: nameField });
 
 // Ranges catch typos (e.g. 1700 cm) without excluding real people.
+/** Per-profile app preferences (just the assistant toggle for now). */
+export const preferencesSchema = z.object({ showAgent: z.boolean() });
+
 export const onboardingSchema = z.object({
   sex: z.enum(['female', 'male', 'other']),
   age: z.number().int().min(13).max(100),

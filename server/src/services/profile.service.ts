@@ -142,6 +142,14 @@ export const profileService = {
     return this.getById(id);
   },
 
+  async setPreferences(id: string, prefs: { showAgent: boolean }) {
+    await db
+      .update(profiles)
+      .set({ showAgent: prefs.showAgent })
+      .where(and(eq(profiles.id, id), active));
+    return this.getById(id);
+  },
+
   async removeAvatar(id: string) {
     const [before] = await db
       .select({ key: profiles.avatarKey })

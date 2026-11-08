@@ -3,13 +3,11 @@ import { z } from 'zod';
 import { authedProfileId } from '../middlewares/auth';
 import { mealService } from '../services/meals/meal.service';
 import { AppError } from '../utils/app-error';
-import { looksLikeAudio } from '../validators/audio.validator';
 import { looksLikeImage } from '../validators/image.validator';
 import {
   mealIdParamSchema,
   type AnalyzeMealInput,
   type EstimateItemInput,
-  type VoiceMealInput,
   type SaveMealInput,
 } from '../validators/meal.validator';
 
@@ -25,15 +23,6 @@ export const mealController = {
     const body = req.body as AnalyzeMealInput;
     decodeImage(body.image); // reject non-images before spending an AI call
     res.json(await mealService.analyze(authedProfileId(req), body));
-  },
-
-  async analyzeVoice(req: Request, res: Response) {
-    const body = req.body as VoiceMealInput;
-    // Reject non-audio before spending a transcription call.
-    if (!looksLikeAudio(Buffer.from(body.audio.base64, 'base64'), body.audio.mimeType)) {
-      throw new AppError(400, 'That recording isn’t a supported audio file');
-    }
-    res.json(await mealService.analyzeVoice(authedProfileId(req), body));
   },
 
   async estimateItem(req: Request, res: Response) {

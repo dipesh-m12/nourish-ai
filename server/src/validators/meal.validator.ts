@@ -1,19 +1,11 @@
 import { z } from 'zod';
 import { localDate } from './challenge.validator';
-import { audioInputSchema } from './audio.validator';
 import { imageInputSchema } from './image.validator';
 
 export const analyzeMealSchema = z.object({
   date: localDate,
   image: imageInputSchema,
   /** Set when the user started from a challenge's "+", so the AI knows what they meant to log. */
-  challengeId: z.uuid().optional(),
-});
-
-/** A short voice note describing the meal ("2 rotis, dal and curd"). */
-export const voiceMealSchema = z.object({
-  date: localDate,
-  audio: audioInputSchema,
   challengeId: z.uuid().optional(),
 });
 
@@ -51,5 +43,4 @@ export const mealIdParamSchema = z.object({ id: z.uuid() });
 
 export type AnalyzeMealInput = z.infer<typeof analyzeMealSchema>;
 export type EstimateItemInput = z.infer<typeof estimateItemSchema>;
-export type VoiceMealInput = z.infer<typeof voiceMealSchema>;
 export type SaveMealInput = z.infer<typeof saveMealSchema>;

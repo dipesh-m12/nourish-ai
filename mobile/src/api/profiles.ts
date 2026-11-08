@@ -101,6 +101,16 @@ export function useUpdateAvatar() {
   });
 }
 
+/** Show or hide the assistant on the dashboard (also answers the first-time intro). */
+export function useSetShowAgent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (showAgent: boolean) =>
+      request<Profile>('/me/preferences', { method: 'PUT', body: { showAgent } }),
+    onSuccess: (profile) => queryClient.setQueryData(queryKeys.me, profile),
+  });
+}
+
 /** Soft-deletes the signed-in account, then signs out (its token stops working anyway). */
 export function useDeleteAccount() {
   const queryClient = useQueryClient();

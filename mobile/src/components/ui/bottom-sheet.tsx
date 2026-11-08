@@ -1,6 +1,6 @@
 import { X } from 'lucide-react-native';
 import type { ReactNode } from 'react';
-import { KeyboardAvoidingView, Modal, Pressable, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Pressable, useWindowDimensions, View } from 'react-native';
 import Animated, { Easing, SlideInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '@/constants/colors';
@@ -11,6 +11,8 @@ interface Props {
   onClose: () => void;
   title: string;
   children: ReactNode;
+  /** Share of the screen height the sheet takes at least (e.g. 0.7), for roomier sheets. */
+  minHeightRatio?: number;
 }
 
 // iOS sheet curve (expo-animation skill).
@@ -20,8 +22,9 @@ const EASE_SHEET = Easing.bezier(0.32, 0.72, 0, 1);
  * Mobile bottom sheet (preferred over a centred modal on phones). Built on RN Modal so it works
  * in Expo Go with no extra native module. Closes on backdrop tap, the X, or Android back.
  */
-export function BottomSheet({ visible, onClose, title, children }: Props) {
+export function BottomSheet({ visible, onClose, title, children, minHeightRatio }: Props) {
   const insets = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
 
   return (
     <Modal
@@ -42,7 +45,10 @@ export function BottomSheet({ visible, onClose, title, children }: Props) {
         <Animated.View
           entering={SlideInDown.duration(320).easing(EASE_SHEET)}
           className="rounded-t-3xl bg-card px-6 pt-3"
-          style={{ paddingBottom: Math.max(insets.bottom, 16) + 8 }}
+          style={{
+            paddingBottom: Math.max(insets.bottom, 16) + 8,
+            minHeight: minHeightRatio ? height * minHeightRatio : undefined,
+          }}
           accessibilityViewIsModal
         >
           <View className="mb-3 h-1 w-10 self-center rounded-full bg-line" />

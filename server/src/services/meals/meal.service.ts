@@ -13,14 +13,9 @@ import {
 import { AppError } from '../../utils/app-error';
 import { ensureTracking, shortLabel } from '../challenges/tracking.service';
 import { storageService } from '../storage.service';
-import type {
-  AnalyzeMealInput,
-  SaveMealInput,
-  VoiceMealInput,
-} from '../../validators/meal.validator';
+import type { AnalyzeMealInput, SaveMealInput } from '../../validators/meal.validator';
 import { conflictMessage, dietConflicts } from '../diet-rules';
 import { canCreditFromMeal } from './food-challenge';
-import { transcribe } from '../ai/transcription.service';
 import { analyzeMeal, estimateTypedItem, type MealSource } from './meal-analysis.service';
 
 const round = (n: number) => Math.round(n);
@@ -107,17 +102,6 @@ async function withPhotoUrl(m: Meal) {
     photoKey: m.photoKey,
     photoUrl: m.photoKey ? await storageService.signedReadUrl(m.photoKey) : null,
   };
-}
-
-/**
- * Whisper "hears" stock phrases in silence or noise ("you", "thank you", "thanks for watching").
- * Treat those, and anything with almost no letters, as nothing said.
- */
-const WHISPER_SILENCE =
-  /^(you|thank you|thanks|thanks for watching|bye|okay|ok|hmm+|uh+|um+)[.!?\s]*$/i;
-function isSilence(transcript: string) {
-  const t = transcript.trim();
-  return t.replace(/[^\p{L}]/gu, '').length < 4 || WHISPER_SILENCE.test(t);
 }
 
 export type MealResponse = Awaited<ReturnType<typeof withPhotoUrl>>;
@@ -215,39 +199,14 @@ export const mealService = {
   },
 
   /** Photo → estimated items, kcal and challenge credits. Saves nothing: the user confirms first. */
+  /** Words ("2 rotis and dal") → the same estimate a photo gets. Used by the assistant. */
+  estimateText(profileId: string, date: string, text: string) {
+    return analyzeSource(profileId, date, undefined, { text });
+  },
+
   /** Photo → estimate (nothing saved; the user confirms first). */
   analyze(profileId: string, { date, image, challengeId }: AnalyzeMealInput) {
     return analyzeSource(profileId, date, challengeId, { image });
-  },
-
-  /**
-   * Voice → transcript → the same estimate a photo gets. The transcript comes back too, so the
-   * user sees what we heard (and fixes it by editing items).
-   */
-  async analyzeVoice(profileId: string, { date, audio, challengeId }: VoiceMealInput) {
-    let transcript: string;
-    try {
-      transcript = await transcribe(audio);
-    } catch {
-      throw new AppError(502, 'We couldn’t hear that right now. Please try again, or type it.');
-    }
-    if (isSilence(transcript)) {
-      return {
-        isFood: false as const,
-        transcript,
-        comment: 'We didn’t catch that. Hold the button and say what you ate.',
-      };
-    }
-    const result = await analyzeSource(profileId, date, challengeId, { text: transcript });
-    if (!result.isFood) {
-      // The model's own wording talks about photos; for voice, say what to try instead.
-      return {
-        ...result,
-        transcript,
-        comment: 'We didn’t hear a food. Try “2 rotis, dal and curd”.',
-      };
-    }
-    return { ...result, transcript };
   },
 
   /** Stores a confirmed meal and its challenge credits together, so rings never disagree. */

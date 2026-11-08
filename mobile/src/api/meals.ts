@@ -1,16 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { request } from '@/lib/api-client';
 import { AI_TIMEOUT_MS } from '@/lib/api-config';
-import type { VoiceNote } from '@/hooks/use-voice-note';
 import type { Photo } from '@/lib/photo';
-import type {
-  EstimatedItem,
-  MealAnalysis,
-  MealCredit,
-  MealItem,
-  SavedMeal,
-  VoiceMealAnalysis,
-} from '@/types/meal';
+import type { EstimatedItem, MealAnalysis, MealCredit, MealItem, SavedMeal } from '@/types/meal';
 import { todayKey } from './today';
 
 /** Photo → estimated items, kcal and challenge credits. Nothing is saved until the user confirms. */
@@ -67,18 +59,6 @@ export function useEstimateItem() {
       request<EstimatedItem>('/me/meals/items/estimate', {
         method: 'POST',
         body: { text },
-        timeoutMs: AI_TIMEOUT_MS,
-      }),
-  });
-}
-
-/** A voice note → transcript → the same estimate a photo gets. Nothing is saved yet. */
-export function useVoiceMeal(date: string) {
-  return useMutation({
-    mutationFn: ({ note, challengeId }: { note: VoiceNote; challengeId?: string }) =>
-      request<VoiceMealAnalysis>('/me/meals/voice', {
-        method: 'POST',
-        body: { date, audio: { mimeType: note.mimeType, base64: note.base64 }, challengeId },
         timeoutMs: AI_TIMEOUT_MS,
       }),
   });

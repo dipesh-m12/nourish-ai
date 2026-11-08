@@ -6,6 +6,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useExerciseFilters, useExercises, useForYou } from '@/api/exercises';
 import { ExerciseRow, title } from '@/components/exercises/exercise-row';
+import { MicButton, type MicState } from '@/components/ui/mic-button';
 import { Button } from '@/components/ui/button';
 import { PressableScale } from '@/components/ui/pressable-scale';
 import { SkeletonBlock, SkeletonGroup } from '@/components/ui/skeleton';
@@ -23,6 +24,8 @@ export default function ExercisesScreen() {
   const date = localDate();
   const [text, setText] = useState('');
   const [category, setCategory] = useState<string | null>(null);
+  const [mic, setMic] = useState<MicState>({ kind: 'idle' });
+  const [voiceHint, setVoiceHint] = useState<string | null>(null);
   const q = useDebouncedValue(text.trim(), 300);
   const list = useExercises(date, q, category);
   const forYou = useForYou(date);
@@ -37,28 +40,58 @@ export default function ExercisesScreen() {
       <Heading className="text-3xl">Exercises</Heading>
       <Text className="mt-1 text-muted">Do one, snap it, and it counts toward today’s burn.</Text>
 
-      <View className="mt-5 h-14 flex-row items-center gap-3 rounded-2xl bg-card px-4">
+      <View className="mt-5 h-14 flex-row items-center gap-2 rounded-2xl bg-card pl-5 pr-3">
         <Search size={20} color={colors.muted} />
-        <TextInput
-          value={text}
-          onChangeText={setText}
-          placeholder="Search squats, chest, stretch…"
-          placeholderTextColor={colors.muted}
-          returnKeyType="search"
-          accessibilityLabel="Search exercises"
-          className="flex-1 font-sans text-base text-ink"
-        />
-        {text.length > 0 && (
+        {/* While the mic is busy the bar says so, in the same spot the words will land. */}
+        {mic.kind === 'idle' ? (
+          <TextInput
+            value={text}
+            onChangeText={(t) => {
+              setText(t);
+              setVoiceHint(null);
+            }}
+            placeholder="Search or hold the mic…"
+            placeholderTextColor={colors.muted}
+            returnKeyType="search"
+            accessibilityLabel="Search exercises"
+            className="h-full flex-1 px-2 py-0 font-sans text-base text-ink"
+          />
+        ) : (
+          <Text
+            className="flex-1 px-2 font-sans-medium text-base text-accent"
+            accessibilityLiveRegion="polite"
+          >
+            {mic.kind === 'recording'
+              ? `Listening… 0:${String(Math.floor(mic.ms / 1000)).padStart(2, '0')}`
+              : 'Hearing you…'}
+          </Text>
+        )}
+        {text.length > 0 && mic.kind === 'idle' && (
           <Pressable
             onPress={() => setText('')}
-            hitSlop={10}
+            hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel="Clear search"
+            className="mr-1 h-8 w-8 items-center justify-center rounded-full bg-bg active:opacity-70"
           >
-            <X size={18} color={colors.muted} />
+            <X size={16} color={colors.muted} />
           </Pressable>
         )}
+        <MicButton
+          label="Hold to search by voice"
+          onState={setMic}
+          onText={(said) => {
+            setVoiceHint(null);
+            setText(said);
+          }}
+          onProblem={setVoiceHint}
+        />
       </View>
+      {voiceHint && (
+        <Text className="mt-2 text-sm text-accent" accessibilityLiveRegion="polite">
+          {voiceHint}
+        </Text>
+      )}
 
       <ScrollView
         horizontal

@@ -50,6 +50,3 @@ export interface SavedMeal {
 
 export type EstimatedItem =
   { isFood: true; item: MealItem; dietWarning: string | null } | { isFood: false };
-
-/** Voice results also carry what we heard, shown above the estimate. */
-export type VoiceMealAnalysis = MealAnalysis & { transcript: string };
