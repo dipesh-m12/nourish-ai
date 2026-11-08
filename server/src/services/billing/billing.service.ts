@@ -271,10 +271,7 @@ export const billingService = {
         .update(subscriptions)
         .set({
           ...fromRazorpay(sub),
-          nextBillAt: laterOf(
-            row.nextBillAt,
-            sub.paid_count > 0 ? fromUnix(sub.current_end) : null,
-          ),
+          nextBillAt: accessUntil(row, sub),
           ...(['cancelled', 'completed', 'expired'].includes(sub.status) && {
             autoRenew: false,
             cancelledAt: row.cancelledAt ?? new Date(),
@@ -314,6 +311,21 @@ export const billingService = {
 };
 
 const laterOf = (a: Date | null, b: Date | null) => (!a ? b : !b ? a : a > b ? a : b);
+
+/**
+ * Paid-through date after an event. Charges only ever move it forward. A cancel normally keeps
+ * it (autopay off, access until then), but an immediate cancel (e.g. from the Razorpay
+ * dashboard) ends earlier: its `ended_at` is before our date, so access stops there.
+ */
+function accessUntil(row: Subscription, sub: RzpSubscription) {
+  const paidThrough = laterOf(
+    row.nextBillAt,
+    sub.paid_count > 0 ? fromUnix(sub.current_end) : null,
+  );
+  const endedAt = fromUnix(sub.ended_at);
+  const ended = ['cancelled', 'completed', 'expired'].includes(sub.status);
+  return ended && endedAt && paidThrough && endedAt < paidThrough ? endedAt : paidThrough;
+}
 
 export interface WebhookBody {
   event: string;

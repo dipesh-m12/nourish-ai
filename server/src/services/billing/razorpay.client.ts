@@ -56,6 +56,8 @@ export interface RzpSubscription {
   end_at: number | null;
   charge_at: number | null;
   paid_count: number;
+  /** Set when the subscription actually ended (an immediate cancel: now; at cycle end: then). */
+  ended_at?: number | null;
   notes?: Record<string, string>;
 }
 
