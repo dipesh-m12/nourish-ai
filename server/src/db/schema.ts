@@ -483,3 +483,16 @@ export type Activity = typeof activities.$inferSelect;
 export type AgentAction = typeof agentActions.$inferSelect;
 export type AgentMessage = typeof agentMessages.$inferSelect;
 export type ActivityKind = (typeof activityKindEnum.enumValues)[number];
+
+/**
+ * Kill switch for old app builds, one row per platform. Builds at or below `blockedThrough` are
+ * refused by the API (426) and the app shows "Update required". Null = nothing blocked.
+ * Changed through PUT /api/admin/app-version, which also clears the Redis cache.
+ */
+export const appVersionRules = pgTable('app_version_rules', {
+  platform: text('platform').primaryKey(), // 'android' | 'ios'
+  blockedThrough: text('blocked_through'),
+  message: text('message'),
+  updateUrl: text('update_url'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});

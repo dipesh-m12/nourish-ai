@@ -14,6 +14,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AnimatedSplash } from '@/components/animated-splash';
 import { OfflineBanner } from '@/components/offline-banner';
 import { Toast } from '@/components/toast';
+import { UpdateRequired } from '@/components/update-required';
 import { colors } from '@/constants/colors';
 import { startNetworkMonitoring } from '@/lib/network';
 import { posthog } from '@/lib/posthog';
@@ -78,6 +79,7 @@ export default function RootLayout() {
           </Stack>
           <OfflineBanner />
           <Toast />
+          <UpdateRequired />
           {/* Rendered above the app, which loads underneath while the splash plays. */}
           {!splashDone && <AnimatedSplash onFinish={finishSplash} />}
         </Analytics>

@@ -1,9 +1,10 @@
 import cors from 'cors';
 import express from 'express';
-import path from 'node:path';
 import { redisHealthy } from './config/redis';
 import { billingController } from './controllers/billing.controller';
+import { requireSupportedVersion } from './middlewares/app-version';
 import { errorHandler, notFound } from './middlewares/error-handler';
+import adminRoutes from './routes/admin.routes';
 import authRoutes from './routes/auth.routes';
 import meRoutes from './routes/me.routes';
 import profileRoutes from './routes/profile.routes';
@@ -26,9 +27,9 @@ app.get('/health', async (_req, res) => {
   res.status(redisOk ? 200 : 503).json({ status: redisOk ? 'ok' : 'degraded', redis: redisOk });
 });
 
-// Public brand files (the logo Razorpay Checkout shows). Cached for a day.
-app.use('/api/static', express.static(path.resolve('public'), { maxAge: '1d' }));
-
+app.use('/api/admin', adminRoutes); // ADMIN_TOKEN required
+// Blocked app builds stop here (426), before any app route runs.
+app.use('/api', requireSupportedVersion);
 app.use('/api/auth', authRoutes); // public: sign up, start a session
 app.use('/api/profiles', profileRoutes); // public: picker list
 app.use('/api/me', meRoutes); // JWT required

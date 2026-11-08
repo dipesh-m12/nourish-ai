@@ -1,6 +1,15 @@
 import { onlineManager } from '@tanstack/react-query';
+import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 import { useSession } from '@/store/session';
+import { useUpdateGate } from '@/store/update-gate';
 import { API_BASE_URL, API_TIMEOUT_MS } from './api-config';
+
+/** Lets the server refuse builds with known bugs (see the server's app-version rules). */
+const BUILD_HEADERS: Record<string, string> = {
+  'X-App-Platform': Platform.OS,
+  'X-App-Version': Constants.expoConfig?.version ?? '0.0.0',
+};
 
 export class ApiError extends Error {
   constructor(
@@ -28,7 +37,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   }
 
   const token = useSession.getState().token;
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const headers: Record<string, string> = { 'Content-Type': 'application/json', ...BUILD_HEADERS };
   if (token) headers.Authorization = `Bearer ${token}`;
 
   const controller = new AbortController();
@@ -60,6 +69,13 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   if (res.status === 401 && token) await useSession.getState().signOut();
 
   const data = await res.json().catch(() => null);
+  // This build is blocked by the server's kill switch: the app swaps to the update screen.
+  if (res.status === 426) {
+    useUpdateGate.getState().block({
+      message: data?.error?.message ?? 'Please update Nourish AI to keep going.',
+      updateUrl: data?.error?.details?.updateUrl ?? null,
+    });
+  }
   if (!res.ok) throw new ApiError(res.status, data?.error?.message ?? 'Something went wrong');
   return data as T;
 }

@@ -40,6 +40,8 @@ const envSchema = z.object({
   REDIS_HOST: z.string().default('localhost'),
   REDIS_PORT: z.coerce.number().int().default(6379),
   REDIS_PASSWORD: z.string().optional(),
+  /** Bearer token for /api/admin/* (app version kill switch). Unset = admin routes are off. */
+  ADMIN_TOKEN: z.string().min(32, 'ADMIN_TOKEN must be at least 32 characters').optional(),
 });
 
 export const env = envSchema.parse(process.env);

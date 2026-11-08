@@ -120,6 +120,13 @@
       "when": 1794143768319,
       "tag": "0016_billing",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1794160197271,
+      "tag": "0017_app_version_rules",
+      "breakpoints": true
     }
   ]
 }
