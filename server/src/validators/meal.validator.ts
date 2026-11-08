@@ -29,6 +29,8 @@ export const saveMealSchema = z.object({
     .max(12),
   comment: z.string().max(200).optional(),
   /** Challenge credits from the analysis. The server re-checks each one. */
+  /** The challenge whose "+" opened the meal sheet; it's credited if the food is on-diet. */
+  challengeId: z.uuid().optional(),
   credits: z
     .array(z.object({ challengeId: z.uuid(), amount: z.number().positive().max(1000) }))
     .max(6)

@@ -58,34 +58,73 @@ function isProteinGrams(c: Tracked) {
   return /^g(rams?)?$/i.test(c.tracking.unit ?? '') && /protein/i.test(c.title);
 }
 
+const isProteinChallenge = (c: Tracked) =>
+  /protein/i.test(c.title) || /protein/i.test(c.tracking.label ?? '');
+
+/** Below this a meal doesn't count toward a protein challenge (a few nuts on a salad). */
+const MIN_PROTEIN_G = 10;
+/** One "serving" of protein, for challenges counted in servings. */
+const PROTEIN_SERVING_G = 15;
+
+/** Amount for a credit, in the challenge's own unit, capped at one period's target. */
+function creditAmount(c: Tracked, raw: number) {
+  const t = c.tracking;
+  return t.kind === 'check' ? 1 : Math.round(Math.min(raw, t.target) * 100) / 100;
+}
+
 /**
  * Keeps only credits for the user's own eligible challenges, one per challenge, with the
  * amount capped to one period's target (a meal can finish a challenge, not overflow it).
+ */
+/**
+ * The meal's challenge credits. Three sources, merged one-per-challenge:
+ * 1. what the AI matched (only the user's own eligible challenges, capped),
+ * 2. a rule for protein challenges: protein is a number we compute, so whether a meal counts
+ *    must not depend on how the AI reads a title like "Add protein to breakfast",
+ * 3. the challenge the user started from (tapped its "+"): they said this meal is for it.
  */
 function cleanCredits(
   credits: { challengeId: string; amount: number }[],
   eligible: Tracked[],
   totals: ReturnType<typeof totalsOf>,
+  startedFrom?: string,
 ) {
   const byId = new Map(eligible.map((c) => [c.id, c]));
-  const seen = new Set<string>();
-  return credits.flatMap((cr) => {
+  const out = new Map<
+    string,
+    { challengeId: string; amount: number; label: string; unit: string | null }
+  >();
+  const add = (c: Tracked, raw: number) => {
+    if (out.has(c.id) || !(raw > 0)) return;
+    out.set(c.id, {
+      challengeId: c.id,
+      amount: creditAmount(c, raw),
+      label: c.tracking.label ?? shortLabel(c.title),
+      unit: c.tracking.kind === 'check' ? null : c.tracking.unit,
+    });
+  };
+
+  for (const cr of credits) {
     const c = byId.get(cr.challengeId);
-    if (!c || seen.has(c.id) || !(cr.amount > 0)) return [];
-    seen.add(c.id);
-    const t = c.tracking;
     // A protein challenge counted in grams gets the meal's computed protein, not a guess.
-    const raw = isProteinGrams(c) ? totals.proteinG : cr.amount;
-    const amount = t.kind === 'check' ? 1 : Math.round(Math.min(raw, t.target) * 100) / 100;
-    return [
-      {
-        challengeId: c.id,
-        amount,
-        label: t.label ?? shortLabel(c.title),
-        unit: t.kind === 'check' ? null : t.unit,
-      },
-    ];
-  });
+    if (c) add(c, isProteinGrams(c) ? totals.proteinG : cr.amount);
+  }
+
+  if (totals.proteinG >= MIN_PROTEIN_G) {
+    for (const c of eligible.filter(isProteinChallenge)) {
+      add(
+        c,
+        isProteinGrams(c)
+          ? totals.proteinG
+          : Math.max(1, Math.floor(totals.proteinG / PROTEIN_SERVING_G)),
+      );
+    }
+  }
+
+  const tapped = startedFrom ? byId.get(startedFrom) : undefined;
+  if (tapped) add(tapped, isProteinGrams(tapped) ? totals.proteinG : tapped.tracking.step);
+
+  return [...out.values()];
 }
 
 async function withPhotoUrl(m: Meal) {
@@ -105,6 +144,9 @@ async function withPhotoUrl(m: Meal) {
 }
 
 export type MealResponse = Awaited<ReturnType<typeof withPhotoUrl>>;
+
+/** Titles that say nothing about the food. */
+const GENERIC_TITLE = /\b(user|described|unknown|meal (log|entry)|food item)\b/i;
 
 async function analyzeSource(
   profileId: string,
@@ -166,16 +208,19 @@ async function analyzeSource(
     /** Per item, so the app can lift the warning (and restore credits) once it's removed. */
     conflicts: conflicts.map((c) => ({ item: c.item, message: conflictMessage([c])! })),
     title:
-      analysis.title ||
-      items
-        .map((i) => i.name)
-        .join(', ')
-        .slice(0, 80),
+      // Typed/spoken meals sometimes get a placeholder title ("User described meal"); the foods
+      // themselves are a better name.
+      analysis.title && !GENERIC_TITLE.test(analysis.title)
+        ? analysis.title
+        : items
+            .map((i) => i.name)
+            .join(', ')
+            .slice(0, 80),
     items,
     totals: totalsOf(items),
     comment: analysis.comment,
     // What the meal earns without its conflicting items; save() re-checks the final list.
-    credits: cleanCredits(analysis.credits, eligible, totalsOf(items)),
+    credits: cleanCredits(analysis.credits, eligible, totalsOf(items), challengeId),
   };
 }
 
@@ -222,7 +267,9 @@ export const mealService = {
       profile?.dietType ?? null,
       profile?.allergies ?? [],
     ).length;
-    const credits = offDiet ? [] : cleanCredits(input.credits, eligible, totalsOf(items));
+    const credits = offDiet
+      ? []
+      : cleanCredits(input.credits, eligible, totalsOf(items), input.challengeId);
 
     let photoKey: string | null = null;
     if (photo) {

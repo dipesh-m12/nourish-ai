@@ -19,6 +19,8 @@ export function useAnalyzeMeal(date: string) {
 
 interface SaveInput {
   title: string;
+  /** The challenge whose "+" opened the sheet. */
+  challengeId?: string;
   items: MealItem[];
   comment?: string;
   credits: MealCredit[];

@@ -109,6 +109,7 @@ export function MealSheet({ request, date, onClose }: Props) {
     save.mutate(
       {
         title: result.title,
+        challengeId: request?.challengeId,
         items,
         comment: result.comment,
         // Off-diet food still counts as calories, never as challenge progress.
