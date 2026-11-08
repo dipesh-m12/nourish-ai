@@ -1,4 +1,5 @@
 import '../global.css';
+import '@/lib/native-wind-interop';
 
 import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold } from '@expo-google-fonts/inter';
 import { Lora_600SemiBold, Lora_700Bold } from '@expo-google-fonts/lora';
@@ -65,6 +66,8 @@ export default function RootLayout() {
             <Stack.Screen name="onboarding" options={{ gestureEnabled: false }} />
             <Stack.Screen name="dashboard" options={{ animation: 'fade', gestureEnabled: false }} />
             <Stack.Screen name="profile" options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="exercises" options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="exercises/[id]" options={{ animation: 'slide_from_right' }} />
           </Stack>
           <OfflineBanner />
           <Toast />

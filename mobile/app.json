@@ -34,7 +34,18 @@
           "imageWidth": 200
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Nourish AI uses your photos as proof for your challenges.",
+          "cameraPermission": "Nourish AI uses your camera to snap proof of your challenges."
+        }
+      ],
+      [
+        "expo-audio",
+        { "microphonePermission": "Nourish AI uses the microphone so you can say what you ate." }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
