@@ -50,6 +50,48 @@
       "when": 1794080571653,
       "tag": "0006_feedback",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1794084732541,
+      "tag": "0007_challenge_tracking",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1794086202837,
+      "tag": "0008_accepted_at",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1794086700069,
+      "tag": "0009_avatar_key",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1794117895687,
+      "tag": "0010_meals",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1794122486492,
+      "tag": "0011_activities",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1794124474944,
+      "tag": "0012_exercise_library",
+      "breakpoints": true
     }
   ]
 }
