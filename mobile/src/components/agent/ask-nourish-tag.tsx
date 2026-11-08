@@ -18,8 +18,8 @@ import { Text } from '@/components/ui/text';
 import { AgentLottie } from './agent-lottie';
 
 const IDLE_MS = 3800;
-/** Gap between the pill and the right edge of the screen. */
-const EDGE_INSET = 12;
+/** Flush with the right edge of the screen (the tag hangs from it). */
+const EDGE_INSET = 0;
 const EASE = Easing.inOut(Easing.sin);
 
 /**
@@ -68,7 +68,7 @@ export function AskNourishTag({ bottom }: { bottom: number }) {
           }}
           accessibilityRole="button"
           accessibilityLabel="Ask Nourish, your assistant"
-          className="flex-row items-center gap-2.5 rounded-full bg-ink py-2 pl-3 pr-4 shadow-lg"
+          className="flex-row items-center gap-2.5 rounded-l-full bg-ink py-2 pl-3 pr-4 shadow-lg"
           style={{ elevation: 6 }}
         >
           <AgentLottie size={40} round />
