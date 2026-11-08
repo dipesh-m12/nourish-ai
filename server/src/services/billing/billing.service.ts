@@ -10,6 +10,7 @@ import {
 } from '../../db/schema';
 import { env } from '../../config/env';
 import { AppError } from '../../utils/app-error';
+import { CHECKOUT_TTL_MS, checkoutLock } from './checkout-lock';
 import {
   razorpay,
   razorpayConfigured,
@@ -111,8 +112,10 @@ export const billingService = {
   },
 
   /**
-   * Starts (or reuses) a subscription for checkout. Blocked while autopay is on. If the user
-   * still has paid days (they cancelled), the new one starts when those run out.
+   * Starts the user's checkout. Idempotent per user (Redis): double taps, retries or two devices
+   * within the checkout window all get the SAME Razorpay subscription, so a user can never end up
+   * paying for two. Blocked while autopay is on. If they still have paid days (they cancelled),
+   * the new subscription starts when those run out.
    */
   async checkout(profileId: string) {
     const rows = await subscriptionsOf(profileId);
@@ -120,26 +123,47 @@ export const billingService = {
     if (live && (hasAccess(live) || live.status === 'authenticated')) {
       throw new AppError(409, 'You’re already in Mochi’s Club.');
     }
-    // An unfinished checkout from before: reuse it instead of creating another.
-    if (live && live.status === 'created') {
-      return { subscriptionId: live.razorpaySubscriptionId, keyId: env.RAZORPAY_KEY_ID! };
-    }
 
-    const plan = await clubPlan();
-    const paidUntil = rows.find((s) => hasAccess(s))?.nextBillAt;
-    const created = await razorpay.createSubscription({
-      planId: plan.razorpayPlanId,
-      totalCount: TOTAL_CHARGES,
-      startAt: paidUntil ? Math.floor(paidUntil.getTime() / 1000) : undefined,
-      notes: { profileId },
+    const subscriptionId = await checkoutLock.once(profileId, async () => {
+      const plan = await clubPlan();
+      const paidUntil = rows.find((s) => hasAccess(s))?.nextBillAt;
+      const created = await razorpay.createSubscription({
+        planId: plan.razorpayPlanId,
+        totalCount: TOTAL_CHARGES,
+        startAt: paidUntil ? Math.floor(paidUntil.getTime() / 1000) : undefined,
+        // Same window as the Redis key: an abandoned checkout can't be paid later.
+        expireBy: Math.floor((Date.now() + CHECKOUT_TTL_MS) / 1000),
+        notes: { profileId },
+      });
+      await db.insert(subscriptions).values({
+        profileId,
+        planId: plan.id,
+        razorpaySubscriptionId: created.id,
+        ...fromRazorpay(created),
+      });
+      return created.id;
     });
-    await db.insert(subscriptions).values({
-      profileId,
-      planId: plan.id,
-      razorpaySubscriptionId: created.id,
-      ...fromRazorpay(created),
-    });
-    return { subscriptionId: created.id, keyId: env.RAZORPAY_KEY_ID! };
+    return { subscriptionId, keyId: env.RAZORPAY_KEY_ID! };
+  },
+
+  /**
+   * The user closed checkout without paying: clear the idempotency keys and cancel that unpaid
+   * subscription, so it can't be completed later. Razorpay is asked first, so a payment that
+   * did go through (and only its message was slow) is never cancelled.
+   */
+  async abandon(profileId: string) {
+    const subscriptionId = await checkoutLock.current(profileId);
+    await checkoutLock.clear(profileId);
+    if (!subscriptionId) return { cancelled: false };
+
+    const fresh = await razorpay.getSubscription(subscriptionId);
+    if (fresh.status !== 'created') return { cancelled: false }; // paid or authorised: keep it
+    const r = await razorpay.cancelSubscription(subscriptionId, false);
+    await db
+      .update(subscriptions)
+      .set({ ...fromRazorpay(r), autoRenew: false, cancelledAt: new Date() })
+      .where(eq(subscriptions.razorpaySubscriptionId, subscriptionId));
+    return { cancelled: true };
   },
 
   /** The page the app's WebView opens: Razorpay Checkout for this subscription. */
@@ -194,6 +218,8 @@ export const billingService = {
 
     const fresh = await razorpay.getSubscription(input.subscriptionId);
     await db.update(subscriptions).set(fromRazorpay(fresh)).where(eq(subscriptions.id, row.id));
+    // This checkout is done: the next one (e.g. lining up next month) starts fresh.
+    await checkoutLock.clear(profileId);
     await db
       .insert(subscriptionEvents)
       .values({
@@ -215,7 +241,21 @@ export const billingService = {
    */
   async cancel(profileId: string) {
     const rows = await subscriptionsOf(profileId);
-    const targets = rows.filter((s) => AUTOPAY_ON.includes(s.status) && s.autoRenew);
+    const open = rows.filter((s) => AUTOPAY_ON.includes(s.status) && s.autoRenew);
+    const unpaid = open.filter((s) => s.status === 'created');
+    const targets = open.filter((s) => s.status !== 'created');
+    if (unpaid.length) {
+      await db
+        .update(subscriptions)
+        .set({ autoRenew: false, cancelledAt: new Date(), updatedAt: new Date() })
+        .where(
+          inArray(
+            subscriptions.id,
+            unpaid.map((s) => s.id),
+          ),
+        );
+      await checkoutLock.clear(profileId);
+    }
     if (!targets.length) throw new AppError(409, 'There’s no active autopay to turn off.');
     for (const s of targets) {
       const charged = s.paidCount > 0;

@@ -36,6 +36,10 @@ const envSchema = z.object({
   RAZORPAY_KEY_ID: z.string().optional(),
   RAZORPAY_KEY_SECRET: z.string().optional(),
   RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
+  /** Redis (single host + port): localhost in dev, the Redis container's service on EKS. */
+  REDIS_HOST: z.string().default('localhost'),
+  REDIS_PORT: z.coerce.number().int().default(6379),
+  REDIS_PASSWORD: z.string().optional(),
 });
 
 export const env = envSchema.parse(process.env);

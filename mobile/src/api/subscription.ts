@@ -40,6 +40,18 @@ export function useVerifyPayment() {
   });
 }
 
+/**
+ * Checkout closed without paying: the server frees this user's checkout and cancels the unpaid
+ * subscription (it asks Razorpay first, so a real payment is never cancelled). Fire-and-forget:
+ * if it fails, the checkout simply expires in 15 minutes.
+ */
+export function abandonCheckout() {
+  return request<{ cancelled: boolean }>('/me/subscription/checkout/abandon', {
+    method: 'POST',
+    body: {},
+  }).catch(() => null);
+}
+
 /** Autopay off. No refund: access stays until the paid-through date. */
 export function useCancelSubscription() {
   const queryClient = useQueryClient();

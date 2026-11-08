@@ -1,11 +1,11 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { X } from 'lucide-react-native';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
-import { useVerifyPayment } from '@/api/subscription';
+import { abandonCheckout, useVerifyPayment } from '@/api/subscription';
 import { CatFace } from '@/components/companion/cat-face';
 import { ConfettiBurst } from '@/components/confetti-burst';
 import { Button } from '@/components/ui/button';
@@ -32,6 +32,18 @@ export default function CheckoutScreen() {
   const [attempt, setAttempt] = useState(0);
   const handled = useRef(false);
 
+  const leave = () => router.back();
+
+  // However the screen closes (✕, back gesture, Android back, dismissing Razorpay), an unpaid
+  // checkout is freed and its subscription cancelled. A confirmed payment skips this.
+  const paid = useRef(false);
+  useEffect(
+    () => () => {
+      if (!paid.current) void abandonCheckout();
+    },
+    [],
+  );
+
   const onMessage = (e: WebViewMessageEvent) => {
     let msg: CheckoutMessage;
     try {
@@ -39,7 +51,7 @@ export default function CheckoutScreen() {
     } catch {
       return; // not ours
     }
-    if (msg.type === 'dismissed') return router.back();
+    if (msg.type === 'dismissed') return leave();
     if (msg.type === 'failed') {
       setReason(msg.reason);
       return setPhase('failed');
@@ -50,7 +62,10 @@ export default function CheckoutScreen() {
     verify.mutate(
       { paymentId: msg.paymentId, subscriptionId: msg.subscriptionId, signature: msg.signature },
       {
-        onSuccess: () => setPhase('done'),
+        onSuccess: () => {
+          paid.current = true;
+          setPhase('done');
+        },
         onError: (err) => {
           setReason(err.message);
           setPhase('failed');
@@ -96,7 +111,7 @@ export default function CheckoutScreen() {
               setPhase('paying');
             }}
           />
-          <Button variant="ghost" label="Not now" onPress={() => router.back()} />
+          <Button variant="ghost" label="Not now" onPress={leave} />
         </View>
       </SafeAreaView>
     );
@@ -106,7 +121,7 @@ export default function CheckoutScreen() {
     <SafeAreaView className="flex-1 bg-bg">
       <View className="flex-row items-center justify-between px-4 py-2">
         <Pressable
-          onPress={() => router.back()}
+          onPress={leave}
           hitSlop={12}
           accessibilityRole="button"
           accessibilityLabel="Close checkout"

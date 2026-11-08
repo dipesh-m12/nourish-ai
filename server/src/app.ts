@@ -1,5 +1,6 @@
 import cors from 'cors';
 import express from 'express';
+import { redisHealthy } from './config/redis';
 import { billingController } from './controllers/billing.controller';
 import { errorHandler, notFound } from './middlewares/error-handler';
 import authRoutes from './routes/auth.routes';
@@ -18,8 +19,10 @@ app.post(
 // 2 MB fits one resized proof photo (base64); everything else is far smaller.
 app.use(express.json({ limit: '2mb' }));
 
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok' });
+// Liveness + readiness (EKS): reports Redis so the pod isn't marked ready without it.
+app.get('/health', async (_req, res) => {
+  const redisOk = await redisHealthy();
+  res.status(redisOk ? 200 : 503).json({ status: redisOk ? 'ok' : 'degraded', redis: redisOk });
 });
 
 app.use('/api/auth', authRoutes); // public: sign up, start a session

@@ -27,6 +27,11 @@ export const billingController = {
     res.json(await billingService.checkout(authedProfileId(req)));
   },
 
+  /** Checkout closed without paying: free the user's checkout and cancel the unpaid one. */
+  async abandon(req: Request, res: Response) {
+    res.json(await billingService.abandon(authedProfileId(req)));
+  },
+
   async verify(req: Request, res: Response) {
     const parsed = verifySchema.safeParse(req.body);
     if (!parsed.success) throw new AppError(400, 'Invalid request');

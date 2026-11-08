@@ -76,6 +76,7 @@ router.post('/transcribe', validateBody(transcribeSchema), voiceController.trans
 router.get('/subscription', billingController.summary);
 router.get('/subscription/history', billingController.history);
 router.post('/subscription/checkout', billingController.checkout);
+router.post('/subscription/checkout/abandon', billingController.abandon);
 router.post('/subscription/verify', billingController.verify);
 router.post('/subscription/cancel', billingController.cancel);
 router.get('/subscription/checkout-page/:id', billingController.checkoutPage);

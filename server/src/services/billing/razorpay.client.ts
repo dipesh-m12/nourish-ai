@@ -74,6 +74,8 @@ export const razorpay = {
     planId: string;
     totalCount: number;
     startAt?: number;
+    /** Unix seconds after which this checkout can no longer be completed. */
+    expireBy?: number;
     notes: Record<string, string>;
   }) {
     return call<RzpSubscription>('POST', '/subscriptions', {
@@ -82,6 +84,7 @@ export const razorpay = {
       quantity: 1,
       customer_notify: 0,
       ...(input.startAt && { start_at: input.startAt }),
+      ...(input.expireBy && { expire_by: input.expireBy }),
       notes: input.notes,
     });
   },
