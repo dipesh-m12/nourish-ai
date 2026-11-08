@@ -13,6 +13,7 @@ import { type ReactNode, useCallback, useState } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AnimatedSplash } from '@/components/animated-splash';
 import { OfflineBanner } from '@/components/offline-banner';
+import { ScreenFrame } from '@/components/screen-frame';
 import { Toast } from '@/components/toast';
 import { UpdateRequired } from '@/components/update-required';
 import { colors } from '@/constants/colors';
@@ -56,34 +57,40 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <QueryClientProvider client={queryClient}>
-        <StatusBar style="dark" />
-        <Analytics>
-          <Stack
-            screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}
-          >
-            <Stack.Screen name="index" />
-            <Stack.Screen name="new-profile" options={{ animation: 'slide_from_bottom' }} />
-            <Stack.Screen name="onboarding" options={{ gestureEnabled: false }} />
-            <Stack.Screen name="dashboard" options={{ animation: 'fade', gestureEnabled: false }} />
-            <Stack.Screen name="profile" options={{ animation: 'slide_from_right' }} />
-            <Stack.Screen name="exercises" options={{ animation: 'slide_from_right' }} />
-            <Stack.Screen name="assistant" options={{ animation: 'slide_from_bottom' }} />
-            <Stack.Screen name="adopt" options={{ animation: 'slide_from_bottom' }} />
-            <Stack.Screen name="club" options={{ animation: 'slide_from_bottom' }} />
-            <Stack.Screen
-              name="checkout"
-              options={{ animation: 'slide_from_right', gestureEnabled: false }}
-            />
-            <Stack.Screen name="exercises/[id]" options={{ animation: 'slide_from_right' }} />
-          </Stack>
-          <OfflineBanner />
-          <Toast />
-          <UpdateRequired />
-          {/* Rendered above the app, which loads underneath while the splash plays. */}
-          {!splashDone && <AnimatedSplash onFinish={finishSplash} />}
-        </Analytics>
-      </QueryClientProvider>
+      {/* Desktop web: a phone-sized frame on a slightly darker page. Phones: full screen. */}
+      <ScreenFrame backdrop={colors.line}>
+        <QueryClientProvider client={queryClient}>
+          <StatusBar style="dark" />
+          <Analytics>
+            <Stack
+              screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}
+            >
+              <Stack.Screen name="index" />
+              <Stack.Screen name="new-profile" options={{ animation: 'slide_from_bottom' }} />
+              <Stack.Screen name="onboarding" options={{ gestureEnabled: false }} />
+              <Stack.Screen
+                name="dashboard"
+                options={{ animation: 'fade', gestureEnabled: false }}
+              />
+              <Stack.Screen name="profile" options={{ animation: 'slide_from_right' }} />
+              <Stack.Screen name="exercises" options={{ animation: 'slide_from_right' }} />
+              <Stack.Screen name="assistant" options={{ animation: 'slide_from_bottom' }} />
+              <Stack.Screen name="adopt" options={{ animation: 'slide_from_bottom' }} />
+              <Stack.Screen name="club" options={{ animation: 'slide_from_bottom' }} />
+              <Stack.Screen
+                name="checkout"
+                options={{ animation: 'slide_from_right', gestureEnabled: false }}
+              />
+              <Stack.Screen name="exercises/[id]" options={{ animation: 'slide_from_right' }} />
+            </Stack>
+            <OfflineBanner />
+            <Toast />
+            <UpdateRequired />
+            {/* Rendered above the app, which loads underneath while the splash plays. */}
+            {!splashDone && <AnimatedSplash onFinish={finishSplash} />}
+          </Analytics>
+        </QueryClientProvider>
+      </ScreenFrame>
     </GestureHandlerRootView>
   );
 }

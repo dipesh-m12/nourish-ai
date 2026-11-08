@@ -2,9 +2,10 @@ import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { X } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
-import { FlatList, Pressable, useWindowDimensions, View } from 'react-native';
+import { FlatList, Pressable, View } from 'react-native';
 import Animated, { FadeInDown, LinearTransition } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useScreenSize } from '@/hooks/use-screen-size';
 import { useSetCompanion } from '@/api/profiles';
 import { useToday } from '@/api/today';
 import { CatFace } from '@/components/companion/cat-face';
@@ -47,7 +48,7 @@ const LAST = SLIDES.length; // the decision step comes after the rules
  * (returning users land on the decision), and choosing closes the page.
  */
 export default function AdoptScreen() {
-  const { width } = useWindowDimensions();
+  const { width } = useScreenSize();
   const toast = useToast((s) => s.show);
   const today = useToday(localDate());
   const setCompanion = useSetCompanion();

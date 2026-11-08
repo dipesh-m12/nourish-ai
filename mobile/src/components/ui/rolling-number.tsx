@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 import Animated, {
   Easing,
   useReducedMotion,
@@ -49,7 +49,11 @@ export function RollingNumber({ value, format = String, className }: Props) {
 
   return (
     <View className="overflow-hidden">
-      <Animated.View key={value} entering={reduceMotion ? undefined : entering}>
+      {/* Custom entering animations don't run on web (Reanimated warns): digits just change there. */}
+      <Animated.View
+        key={value}
+        entering={reduceMotion || Platform.OS === 'web' ? undefined : entering}
+      >
         <Text className={className}>{format(value)}</Text>
       </Animated.View>
     </View>

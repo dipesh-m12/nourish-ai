@@ -2,9 +2,10 @@ import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
 import { useRef, useState } from 'react';
-import { FlatList, Pressable, useWindowDimensions, View } from 'react-native';
+import { FlatList, Pressable, View } from 'react-native';
 import Animated, { FadeInDown, LinearTransition } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useScreenSize } from '@/hooks/use-screen-size';
 import { Button } from '@/components/ui/button';
 import { Heading, Text } from '@/components/ui/text';
 import { ASSISTANT_INTRO } from '@/constants/assistant-intro';
@@ -18,7 +19,7 @@ const LAST = ASSISTANT_INTRO.length - 1;
  * Finishing or skipping calls `onDone` (the screen saves it, so it never shows again).
  */
 export function AssistantIntro({ onDone, saving }: { onDone: () => void; saving: boolean }) {
-  const { width } = useWindowDimensions();
+  const { width } = useScreenSize();
   const insets = useSafeAreaInsets();
   const [page, setPage] = useState(0);
   const list = useRef<FlatList>(null);

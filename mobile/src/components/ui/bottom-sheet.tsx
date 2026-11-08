@@ -1,9 +1,11 @@
 import { X } from 'lucide-react-native';
 import type { ReactNode } from 'react';
-import { KeyboardAvoidingView, Modal, Pressable, useWindowDimensions, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Pressable, View } from 'react-native';
 import Animated, { Easing, SlideInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ScreenFrame } from '@/components/screen-frame';
 import { colors } from '@/constants/colors';
+import { useScreenSize } from '@/hooks/use-screen-size';
 import { Heading } from './text';
 
 interface Props {
@@ -24,7 +26,7 @@ const EASE_SHEET = Easing.bezier(0.32, 0.72, 0, 1);
  */
 export function BottomSheet({ visible, onClose, title, children, minHeightRatio }: Props) {
   const insets = useSafeAreaInsets();
-  const { height } = useWindowDimensions();
+  const { height } = useScreenSize();
 
   return (
     <Modal
@@ -34,39 +36,42 @@ export function BottomSheet({ visible, onClose, title, children, minHeightRatio 
       onRequestClose={onClose}
       statusBarTranslucent
     >
-      {/* Keyboard-aware, so sheets with text fields keep their button above the keyboard. */}
-      <KeyboardAvoidingView behavior="padding" className="flex-1 justify-end">
-        <Pressable
-          className="absolute inset-0 bg-black/30"
-          onPress={onClose}
-          accessibilityRole="button"
-          accessibilityLabel="Close"
-        />
-        <Animated.View
-          entering={SlideInDown.duration(320).easing(EASE_SHEET)}
-          className="rounded-t-3xl bg-card px-6 pt-3"
-          style={{
-            paddingBottom: Math.max(insets.bottom, 16) + 8,
-            minHeight: minHeightRatio ? height * minHeightRatio : undefined,
-          }}
-          accessibilityViewIsModal
-        >
-          <View className="mb-3 h-1 w-10 self-center rounded-full bg-line" />
-          <View className="mb-5 flex-row items-center justify-between">
-            <Heading className="text-2xl">{title}</Heading>
-            <Pressable
-              onPress={onClose}
-              hitSlop={12}
-              accessibilityRole="button"
-              accessibilityLabel="Close"
-              className="h-9 w-9 items-center justify-center rounded-full bg-bg"
-            >
-              <X size={18} color={colors.ink} />
-            </Pressable>
-          </View>
-          {children}
-        </Animated.View>
-      </KeyboardAvoidingView>
+      {/* Modals render outside the app root: on desktop web, put the sheet in the phone frame. */}
+      <ScreenFrame>
+        {/* Keyboard-aware, so sheets with text fields keep their button above the keyboard. */}
+        <KeyboardAvoidingView behavior="padding" className="flex-1 justify-end">
+          <Pressable
+            className="absolute inset-0 bg-black/30"
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+          />
+          <Animated.View
+            entering={SlideInDown.duration(320).easing(EASE_SHEET)}
+            className="rounded-t-3xl bg-card px-6 pt-3"
+            style={{
+              paddingBottom: Math.max(insets.bottom, 16) + 8,
+              minHeight: minHeightRatio ? height * minHeightRatio : undefined,
+            }}
+            accessibilityViewIsModal
+          >
+            <View className="mb-3 h-1 w-10 self-center rounded-full bg-line" />
+            <View className="mb-5 flex-row items-center justify-between">
+              <Heading className="text-2xl">{title}</Heading>
+              <Pressable
+                onPress={onClose}
+                hitSlop={12}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+                className="h-9 w-9 items-center justify-center rounded-full bg-bg"
+              >
+                <X size={18} color={colors.ink} />
+              </Pressable>
+            </View>
+            {children}
+          </Animated.View>
+        </KeyboardAvoidingView>
+      </ScreenFrame>
     </Modal>
   );
 }

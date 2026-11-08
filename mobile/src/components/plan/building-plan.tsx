@@ -1,8 +1,9 @@
 import LottieView from 'lottie-react-native';
 import { CircleCheck } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown, FadeOut, useReducedMotion } from 'react-native-reanimated';
+import { useScreenSize } from '@/hooks/use-screen-size';
 import { Heading, Text } from '@/components/ui/text';
 import { colors } from '@/constants/colors';
 import { PLAN_STEPS, PLAN_TIPS } from '@/constants/plan-tips';
@@ -36,7 +37,7 @@ export function BuildingPlan({ name }: { name?: string }) {
   }, []);
 
   const current = PLAN_TIPS[tip]!;
-  const { height } = useWindowDimensions();
+  const { height } = useScreenSize();
 
   // Heartbeat up top, progress just under it (towards the centre), and the tip card lifted
   // ~25% off the bottom edge so it sits in comfortable view rather than at the very bottom.
@@ -102,7 +103,7 @@ const SCREEN_GUTTER = 24;
  */
 function Heartbeat() {
   const reduceMotion = useReducedMotion();
-  const { width } = useWindowDimensions();
+  const { width } = useScreenSize();
 
   return (
     <Animated.View

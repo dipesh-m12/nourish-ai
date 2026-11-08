@@ -2,6 +2,9 @@
 module.exports = {
   content: ['./src/**/*.{js,jsx,ts,tsx}'],
   presets: [require('nativewind/preset')],
+  // Light theme only. 'class' (not the default 'media') stops NativeWind on web from crashing
+  // when something (e.g. a dark-mode browser extension) touches the page's class list.
+  darkMode: 'class',
   theme: {
     extend: {
       // Light, calm palette. Primary green passes 4.5:1 contrast with white text.

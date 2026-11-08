@@ -1,6 +1,6 @@
 import { Heart } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
-import { Text, useWindowDimensions, View } from 'react-native';
+import { Text, View } from 'react-native';
 import Animated, {
   Easing,
   type SharedValue,
@@ -13,6 +13,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
+import { useScreenSize } from '@/hooks/use-screen-size';
 import { colors } from '@/constants/colors';
 
 const FADE_H = 170; // the soft black fade rising from the screen's bottom edge
@@ -90,7 +91,7 @@ function GlowWindow({
  * `bleed` = the parent's horizontal and bottom padding, so the fade reaches the screen edges.
  */
 export function MadeWithLove({ bleed }: { bleed: { x: number; bottom: number } }) {
-  const { width } = useWindowDimensions();
+  const { width } = useScreenSize();
   const reduceMotion = useReducedMotion();
   const [wordsW, setWordsW] = useState(0);
   const x = useSharedValue(-100);

@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { type FlatList, useWindowDimensions, View } from 'react-native';
+import { type FlatList, View } from 'react-native';
 import Animated, {
   Extrapolation,
   interpolate,
@@ -11,6 +11,7 @@ import Animated, {
   useSharedValue,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useScreenSize } from '@/hooks/use-screen-size';
 import { ImageSlot } from '@/components/ui/image-slot';
 import { Heading, Text } from '@/components/ui/text';
 import type { WelcomeSlide } from '@/constants/welcome-slides';
@@ -30,7 +31,7 @@ const ART_RATIO = 0.78;
  * pauses while the user swipes, and stays still when reduced motion is on.
  */
 export function HeroCarousel({ slides, intervalMs = 4500 }: Props) {
-  const { width } = useWindowDimensions();
+  const { width } = useScreenSize();
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const listRef = useRef<FlatList<WelcomeSlide>>(null);
