@@ -34,11 +34,30 @@ async function avatarOf(avatarKey: string | null) {
   return { avatarKey, avatarUrl: avatarKey ? await storageService.signedReadUrl(avatarKey) : null };
 }
 
+/**
+ * In Mochi's Club right now (charged at least once, paid-through date ahead). One SQL
+ * expression, so the picker list gets it for every profile in a single query.
+ */
+// The outer column is spelled out: interpolating profiles.id here renders a bare "id", which
+// Postgres resolves to the subquery's own subscriptions.id, so the check was always false.
+const inClub = sql<boolean>`exists (
+  select 1 from subscriptions s
+  where s.profile_id = "profiles"."id" and s.paid_count > 0 and s.next_bill_at > now()
+)`;
+
+async function clubOf(id: string) {
+  const [row] = await db.select({ club: inClub }).from(profiles).where(eq(profiles.id, id));
+  return Boolean(row?.club);
+}
+
 async function toProfileResponse(profile: Profile, goal?: Goal | null) {
   const { deletedAt: _internal, avatarKey, ...visible } = profile;
+  const [avatar, club] = await Promise.all([avatarOf(avatarKey), clubOf(profile.id)]);
   return {
     ...visible,
-    ...(await avatarOf(avatarKey)),
+    ...avatar,
+    /** Shown as a "Club" tag on the avatar. */
+    club,
     onboarded: profile.onboardedAt !== null,
     goal: goal ?? null,
   };
@@ -53,13 +72,15 @@ export const profileService = {
         avatarColor: profiles.avatarColor,
         avatarKey: profiles.avatarKey,
         onboardedAt: profiles.onboardedAt,
+        club: inClub,
       })
       .from(profiles)
       .where(active)
       .orderBy(asc(profiles.createdAt));
     return Promise.all(
-      rows.map(async ({ onboardedAt, avatarKey, ...p }) => ({
+      rows.map(async ({ onboardedAt, avatarKey, club, ...p }) => ({
         ...p,
+        club: Boolean(club),
         ...(await avatarOf(avatarKey)),
         onboarded: onboardedAt !== null,
       })),

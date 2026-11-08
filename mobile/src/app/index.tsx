@@ -92,6 +92,7 @@ function ProfilePicker() {
                     color={p.avatarColor}
                     imageUrl={p.avatarUrl}
                     imageKey={p.avatarKey}
+                    club={p.club}
                   />
                   <View className="flex-1">
                     <Text className="font-sans-semibold text-lg">{p.name}</Text>

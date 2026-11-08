@@ -13,6 +13,8 @@ export interface ProfileSummary {
   avatarUrl: string | null;
   /** Stable storage key: used as the image cache key, since the signed URL changes. */
   avatarKey: string | null;
+  /** In Mochi's Club right now. */
+  club: boolean;
   /** Assistant on the dashboard: null = never asked (show the intro). */
   showAgent: boolean | null;
   onboarded: boolean;
