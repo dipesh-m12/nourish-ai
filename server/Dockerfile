@@ -4,6 +4,7 @@ FROM node:22-alpine
 WORKDIR /app
 COPY package*.json tsconfig.json ./
 COPY src ./src
+COPY public ./public
 # One step on purpose: dev-only packages (tsx, typescript, drizzle-kit) are installed, used to
 # build dist/, and removed in the same layer, so they never add to the image size.
 RUN npm ci && npm run build && npm prune --omit=dev && npm cache clean --force

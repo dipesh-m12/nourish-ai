@@ -57,6 +57,8 @@ export const billingController = {
       key: c.keyId,
       subscription_id: c.subscriptionId,
       name: 'Nourish AI',
+      // Absolute https URL of our logo; behind nginx the real scheme is in X-Forwarded-Proto.
+      image: `${req.header('x-forwarded-proto') ?? req.protocol}://${req.get('host')}/api/static/logo.png`,
       description: `${c.planName} · ${c.price}`,
       prefill: { name: c.name },
       theme: { color: '#1F7A55' },

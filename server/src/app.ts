@@ -1,5 +1,6 @@
 import cors from 'cors';
 import express from 'express';
+import path from 'node:path';
 import { redisHealthy } from './config/redis';
 import { billingController } from './controllers/billing.controller';
 import { errorHandler, notFound } from './middlewares/error-handler';
@@ -24,6 +25,9 @@ app.get('/health', async (_req, res) => {
   const redisOk = await redisHealthy();
   res.status(redisOk ? 200 : 503).json({ status: redisOk ? 'ok' : 'degraded', redis: redisOk });
 });
+
+// Public brand files (the logo Razorpay Checkout shows). Cached for a day.
+app.use('/api/static', express.static(path.resolve('public'), { maxAge: '1d' }));
 
 app.use('/api/auth', authRoutes); // public: sign up, start a session
 app.use('/api/profiles', profileRoutes); // public: picker list
