@@ -1,11 +1,11 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { X } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, View } from 'react-native';
+import { ActivityIndicator, AppState, Linking, Pressable, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
-import { abandonCheckout, useVerifyPayment } from '@/api/subscription';
+import { abandonCheckout, useCheckMembership, useVerifyPayment } from '@/api/subscription';
 import { CatFace } from '@/components/companion/cat-face';
 import { ConfettiBurst } from '@/components/confetti-burst';
 import { Button } from '@/components/ui/button';
@@ -16,6 +16,19 @@ import { useSession } from '@/store/session';
 import type { CheckoutMessage } from '@/types/subscription';
 
 type Phase = 'paying' | 'verifying' | 'done' | 'failed';
+
+/**
+ * `intent://pay?…#Intent;scheme=upi;…;end` → `upi://pay?…` (Linking can't open intent URLs);
+ * other app links (upi://, phonepe://…) pass through.
+ */
+function appLink(url: string): string | null {
+  if (!url.startsWith('intent://')) return url;
+  const scheme = /;scheme=([^;]+)/.exec(url)?.[1];
+  const body = url.slice('intent://'.length).split('#Intent')[0];
+  if (scheme) return `${scheme}://${body}`;
+  const fallback = /;S\.browser_fallback_url=([^;]+)/.exec(url)?.[1];
+  return fallback ? decodeURIComponent(fallback) : null;
+}
 
 /**
  * Razorpay Checkout inside a WebView (react-native-razorpay needs a dev build; this works in
@@ -44,6 +57,43 @@ export default function CheckoutScreen() {
     [],
   );
 
+  // The server hears about a payment from Razorpay's webhooks too, usually within seconds. So
+  // before saying "failed" (or when the user comes back from a UPI app) we ask it first.
+  const checkMembership = useCheckMembership();
+  const confirmFromServer = async (tries: number) => {
+    for (let i = 0; i < tries; i++) {
+      if (await checkMembership()) {
+        paid.current = true;
+        setPhase('done');
+        return true;
+      }
+      if (i < tries - 1) await new Promise((r) => setTimeout(r, 2000));
+    }
+    return false;
+  };
+  const fail = async (why: string) => {
+    setPhase('verifying');
+    if (await confirmFromServer(3)) return;
+    setReason(why);
+    setPhase('failed');
+  };
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active' && !paid.current) void confirmFromServer(4);
+    });
+    return () => sub.remove();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /** UPI apps open through upi:// or intent:// links, which a WebView can't load: hand them to Android. */
+  const onNavigate = ({ url }: { url: string }) => {
+    if (/^(https?|about|data|blob|javascript):/i.test(url)) return true;
+    const target = appLink(url);
+    if (target) Linking.openURL(target).catch(() => undefined);
+    return false;
+  };
+
   const onMessage = (e: WebViewMessageEvent) => {
     let msg: CheckoutMessage;
     try {
@@ -52,10 +102,7 @@ export default function CheckoutScreen() {
       return; // not ours
     }
     if (msg.type === 'dismissed') return leave();
-    if (msg.type === 'failed') {
-      setReason(msg.reason);
-      return setPhase('failed');
-    }
+    if (msg.type === 'failed') return void fail(msg.reason);
     if (handled.current) return;
     handled.current = true;
     setPhase('verifying');
@@ -66,10 +113,7 @@ export default function CheckoutScreen() {
           paid.current = true;
           setPhase('done');
         },
-        onError: (err) => {
-          setReason(err.message);
-          setPhase('failed');
-        },
+        onError: (err) => void fail(err.message),
       },
     );
   };
@@ -142,9 +186,12 @@ export default function CheckoutScreen() {
           }}
           onMessage={onMessage}
           onLoadEnd={() => setLoaded(true)}
-          onError={() => {
-            setReason('Couldn’t open checkout. Check your connection.');
-            setPhase('failed');
+          onShouldStartLoadWithRequest={onNavigate}
+          onError={(e) => {
+            // Only our own page failing to load is fatal; a payment step erroring isn't proof
+            // the payment failed (the server check in `fail` decides).
+            if (!e.nativeEvent.url.includes('/checkout-page/')) return;
+            void fail('Couldn’t open checkout. Check your connection.');
           }}
           javaScriptEnabled
           domStorageEnabled

@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { request } from '@/lib/api-client';
 import type { SubscriptionSummary } from '@/types/subscription';
 import { queryKeys } from './profiles';
@@ -24,20 +24,38 @@ export function useStartCheckout() {
   });
 }
 
+/** Stores a fresh summary and refreshes what membership changes (chat limit, Club tags). */
+function applySummary(queryClient: QueryClient, summary: SubscriptionSummary) {
+  queryClient.setQueryData(subscriptionKey, summary);
+  queryClient.invalidateQueries({ queryKey: ['agent'] });
+  queryClient.invalidateQueries({ queryKey: queryKeys.me });
+  queryClient.invalidateQueries({ queryKey: queryKeys.profiles });
+}
+
 /** Checkout success → the server checks Razorpay's signature and reads the subscription back. */
 export function useVerifyPayment() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: { paymentId: string; subscriptionId: string; signature: string }) =>
       request<SubscriptionSummary>('/me/subscription/verify', { method: 'POST', body: input }),
-    onSuccess: (summary) => {
-      queryClient.setQueryData(subscriptionKey, summary);
-      // The assistant's free-message limit lifts straight away; the Club tag shows on avatars.
-      queryClient.invalidateQueries({ queryKey: ['agent'] });
-      queryClient.invalidateQueries({ queryKey: queryKeys.me });
-      queryClient.invalidateQueries({ queryKey: queryKeys.profiles });
-    },
+    onSuccess: (summary) => applySummary(queryClient, summary),
   });
+}
+
+/**
+ * Asks the server whether the new subscription is live. Webhooks can confirm a payment the
+ * WebView never reported (e.g. a UPI app took over), so this is checked before saying "failed".
+ * Live = paid up with autopay on, or a paid-for subscription queued to start later.
+ */
+export function useCheckMembership() {
+  const queryClient = useQueryClient();
+  return async () => {
+    const summary = await request<SubscriptionSummary>('/me/subscription').catch(() => null);
+    if (!summary) return false;
+    const live = summary.premium && (!!summary.upcoming || !!summary.current?.autoRenew);
+    if (live) applySummary(queryClient, summary);
+    return live;
+  };
 }
 
 /**
