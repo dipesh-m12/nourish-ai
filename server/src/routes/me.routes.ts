@@ -3,6 +3,7 @@ import { activityController } from '../controllers/activity.controller';
 import { agentController } from '../controllers/agent.controller';
 import { voiceController } from '../controllers/voice.controller';
 import { exerciseController } from '../controllers/exercise.controller';
+import { billingController } from '../controllers/billing.controller';
 import { briefingController } from '../controllers/briefing.controller';
 import { challengeController } from '../controllers/challenge.controller';
 import { mealController } from '../controllers/meal.controller';
@@ -70,6 +71,14 @@ router.post('/agent/actions/:id/cancel', agentController.cancel);
 
 // Speech to text for voice input anywhere in the app (search now, the assistant next).
 router.post('/transcribe', validateBody(transcribeSchema), voiceController.transcribe);
+
+// Mochi's Club (subscription). The checkout page is HTML for the app's WebView.
+router.get('/subscription', billingController.summary);
+router.get('/subscription/history', billingController.history);
+router.post('/subscription/checkout', billingController.checkout);
+router.post('/subscription/verify', billingController.verify);
+router.post('/subscription/cancel', billingController.cancel);
+router.get('/subscription/checkout-page/:id', billingController.checkoutPage);
 
 router.post('/feedback', validateBody(createFeedbackSchema), feedbackController.create);
 
