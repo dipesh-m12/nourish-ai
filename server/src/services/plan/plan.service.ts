@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, notInArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, notInArray, sql } from 'drizzle-orm';
 import { db } from '../../db';
 import {
   challenges,
@@ -143,7 +143,7 @@ export const planService = {
       .select()
       .from(challenges)
       .where(eq(challenges.profileId, profileId))
-      .orderBy(asc(challenges.createdAt));
+      .orderBy(asc(challenges.createdAt), asc(challenges.id));
     return toPlanView(plan, goal, items);
   },
 
@@ -151,23 +151,25 @@ export const planService = {
   async setAcceptedChallenges(profileId: string, acceptedIds: string[]) {
     return db.transaction(async (tx) => {
       const mine = eq(challenges.profileId, profileId);
+      // acceptedAt starts the challenge's history: set it only when newly taken on, so
+      // re-saving the picker doesn't reset anyone's streak; cleared when dropped.
       if (acceptedIds.length) {
         await tx
           .update(challenges)
-          .set({ accepted: true })
+          .set({ accepted: true, acceptedAt: sql`coalesce(${challenges.acceptedAt}, now())` })
           .where(and(mine, inArray(challenges.id, acceptedIds)));
         await tx
           .update(challenges)
-          .set({ accepted: false })
+          .set({ accepted: false, acceptedAt: null })
           .where(and(mine, notInArray(challenges.id, acceptedIds)));
       } else {
-        await tx.update(challenges).set({ accepted: false }).where(mine);
+        await tx.update(challenges).set({ accepted: false, acceptedAt: null }).where(mine);
       }
       const rows = await tx
         .select()
         .from(challenges)
         .where(mine)
-        .orderBy(asc(challenges.createdAt));
+        .orderBy(asc(challenges.createdAt), asc(challenges.id));
       return rows.map(toChallengeView);
     });
   },

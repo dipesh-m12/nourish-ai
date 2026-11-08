@@ -1,5 +1,6 @@
 import type { AiPlan } from './plan.schema';
 import type { PlanContext } from './plan.prompt';
+import { containsAllergen } from '../diet-rules';
 
 /**
  * Used when every AI provider fails (outage, rate limit, no key). Less personal, but
@@ -85,26 +86,6 @@ export function templatePlan({ profile, goal, estimatedWeeks }: PlanContext): Ai
 
 /** Plain rice-and-moong khichdi: free of every common allergen in our list. */
 const SAFE_MEAL = 'Moong dal khichdi with cucumber salad';
-
-/** Ingredients that reveal a common allergen in a meal name. Custom allergies match by name. */
-const ALLERGEN_KEYWORDS: Record<string, string[]> = {
-  dairy: ['paneer', 'curd', 'milk', 'ghee', 'cheese', 'raita'],
-  gluten: ['roti', 'toast', 'multigrain', 'paratha', 'wheat'],
-  eggs: ['egg'],
-  fish: ['fish'],
-  shellfish: ['prawn', 'shrimp', 'crab'],
-  soy: ['tofu', 'soy'],
-  peanuts: ['peanut'],
-  'tree nuts': ['almond', 'cashew', 'walnut', 'pista'],
-};
-
-function containsAllergen(meal: string, allergies: string[]) {
-  const text = meal.toLowerCase();
-  return allergies.some((a) => {
-    const key = a.toLowerCase();
-    return (ALLERGEN_KEYWORDS[key] ?? [key]).some((word) => text.includes(word));
-  });
-}
 
 /** Defaults per diet (no root vegetables for Jain, no dairy for vegan). */
 function mealsFor(diet: string | null): string[] {

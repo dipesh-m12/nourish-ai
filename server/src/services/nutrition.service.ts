@@ -33,7 +33,7 @@ const MIN_CALORIES = { female: 1200, male: 1500, other: 1350 };
 const SEX_CONSTANT = { male: 5, female: -161, other: -78 };
 
 // Mifflin–St Jeor equation: the standard estimate of calories burned at rest.
-function bmr({ sex, age, heightCm, weightKg }: Body) {
+export function bmr({ sex, age, heightCm, weightKg }: Body) {
   return 10 * weightKg + 6.25 * heightCm - 5 * age + SEX_CONSTANT[sex];
 }
 
