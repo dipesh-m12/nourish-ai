@@ -20,6 +20,8 @@ import { AgentLottie } from './agent-lottie';
 const IDLE_MS = 3800;
 /** Flush with the right edge of the screen (the tag hangs from it). */
 const EDGE_INSET = 0;
+/** Badge (40) + vertical padding (8 + 8) = 56 tall → 28 makes the left end a half circle. */
+const TAG_RADIUS = 28;
 const EASE = Easing.inOut(Easing.sin);
 
 /**
@@ -68,8 +70,17 @@ export function AskNourishTag({ bottom }: { bottom: number }) {
           }}
           accessibilityRole="button"
           accessibilityLabel="Ask Nourish, your assistant"
-          className="flex-row items-center gap-2.5 rounded-l-full bg-ink py-2 pl-3 pr-4 shadow-lg"
-          style={{ elevation: 6 }}
+          className="flex-row items-center gap-2.5 bg-ink py-2 pr-4 shadow-lg"
+          // Explicit corners: round on the left (half the pill's height), square on the right
+          // where the tag meets the screen edge. Set as styles so they render the same everywhere.
+          style={{
+            elevation: 6,
+            paddingLeft: 16,
+            borderTopLeftRadius: TAG_RADIUS,
+            borderBottomLeftRadius: TAG_RADIUS,
+            borderTopRightRadius: 0,
+            borderBottomRightRadius: 0,
+          }}
         >
           <AgentLottie size={40} round />
           <Text className="font-sans-semibold text-sm text-white">Ask Nourish</Text>
