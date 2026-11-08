@@ -87,7 +87,12 @@ function ProfilePicker() {
                   accessibilityLabel={`Continue as ${p.name}`}
                   className="flex-row items-center gap-4 rounded-2xl bg-card p-4"
                 >
-                  <ProfileAvatar name={p.name} color={p.avatarColor} />
+                  <ProfileAvatar
+                    name={p.name}
+                    color={p.avatarColor}
+                    imageUrl={p.avatarUrl}
+                    imageKey={p.avatarKey}
+                  />
                   <View className="flex-1">
                     <Text className="font-sans-semibold text-lg">{p.name}</Text>
                     <Text className="text-sm text-muted">

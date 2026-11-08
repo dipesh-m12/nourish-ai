@@ -9,6 +9,10 @@ export interface ProfileSummary {
   id: string;
   name: string;
   avatarColor: string;
+  /** Short-lived signed URL; null when there's no photo. */
+  avatarUrl: string | null;
+  /** Stable storage key: used as the image cache key, since the signed URL changes. */
+  avatarKey: string | null;
   onboarded: boolean;
 }
 

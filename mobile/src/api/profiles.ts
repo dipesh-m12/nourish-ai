@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { request } from '@/lib/api-client';
+import type { Photo } from '@/lib/photo';
 import { posthog, posthogLogger } from '@/lib/posthog';
 import { useSession } from '@/store/session';
 import type { AuthResponse, OnboardingPayload, Profile, ProfileSummary } from '@/types/profile';
@@ -81,6 +82,21 @@ export function useStartSession() {
     onSuccess: async (auth) => {
       await onAuth(auth);
       posthog?.capture('profile_session_started', { onboarded: auth.profile.onboarded });
+    },
+  });
+}
+
+/** Uploads a new profile photo (or removes it with `null`) and refreshes everywhere it shows. */
+export function useUpdateAvatar() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (photo: Photo | null) =>
+      photo
+        ? request<Profile>('/me/avatar', { method: 'PUT', body: { image: photo } })
+        : request<Profile>('/me/avatar', { method: 'DELETE' }),
+    onSuccess: (profile) => {
+      queryClient.setQueryData(queryKeys.me, profile);
+      queryClient.invalidateQueries({ queryKey: queryKeys.profiles }); // the picker list
     },
   });
 }

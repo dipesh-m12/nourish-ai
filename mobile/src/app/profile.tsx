@@ -14,6 +14,7 @@ import Animated, { FadeInDown, ZoomIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { usePlan } from '@/api/plan';
 import { useDeleteAccount, useMe } from '@/api/profiles';
+import { AvatarSheet } from '@/components/avatar-sheet';
 import { FeedbackSheet } from '@/components/feedback-sheet';
 import { ProfileAvatar } from '@/components/profile-avatar';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -42,6 +43,7 @@ export default function ProfileScreen() {
   const deleteAccount = useDeleteAccount();
   const toast = useToast((s) => s.show);
   const [pending, setPending] = useState<Pending>(null);
+  const [avatarOpen, setAvatarOpen] = useState(false);
   const token = useSession((s) => s.token);
   // Set while we deliberately leave, so the unexpected-sign-out redirect below doesn't race us.
   const [leaving, setLeaving] = useState(false);
@@ -98,7 +100,23 @@ export default function ProfileScreen() {
       <ScrollView contentContainerClassName="px-6 pb-10" showsVerticalScrollIndicator={false}>
         <View className="items-center pb-8 pt-2">
           <Animated.View entering={ZoomIn.duration(300)}>
-            <ProfileAvatar name={profile.name} color={profile.avatarColor} size={80} />
+            <Pressable
+              onPress={() => setAvatarOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Change profile photo"
+              className="items-center active:opacity-80"
+            >
+              <ProfileAvatar
+                name={profile.name}
+                color={profile.avatarColor}
+                imageUrl={profile.avatarUrl}
+                imageKey={profile.avatarKey}
+                size={88}
+              />
+              <Text className="mt-2 font-sans-semibold text-sm text-primary">
+                {profile.avatarUrl ? 'Change photo' : 'Add photo'}
+              </Text>
+            </Pressable>
           </Animated.View>
           <Animated.View entering={FadeInDown.delay(80).duration(350)}>
             <Heading className="mt-4 text-center">{profile.name}</Heading>
@@ -172,6 +190,7 @@ export default function ProfileScreen() {
       </ScrollView>
 
       <FeedbackSheet visible={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
+      <AvatarSheet visible={avatarOpen} profile={profile} onClose={() => setAvatarOpen(false)} />
       <ConfirmDialog
         visible={pending === 'logout'}
         title="Log out?"
