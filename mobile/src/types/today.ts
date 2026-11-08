@@ -1,5 +1,6 @@
 // Mirrors server/src/services/challenges/challenge-progress.service.ts → today().
 import type { Burn } from './burn';
+import type { Companion } from './companion';
 import type { Meal } from './meal';
 import type { ChallengeCategory, ChallengeFrequency } from './plan';
 
@@ -53,6 +54,7 @@ export interface Today {
   eaten: Macros;
   meals: Meal[];
   burn: Burn;
+  companion: Companion;
   challenges: TodayChallenge[];
 }
 

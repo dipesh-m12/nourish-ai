@@ -111,6 +111,22 @@ export function useSetShowAgent() {
   });
 }
 
+/**
+ * The companion cat: adopt / decline, and "saw the slides". Refreshes `today` so her mood and
+ * the dashboard spot update straight away.
+ */
+export function useSetCompanion() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (companion: { status?: 'adopted' | 'declined'; introSeen?: boolean }) =>
+      request<Profile>('/me/preferences', { method: 'PUT', body: { companion } }),
+    onSuccess: (profile) => {
+      queryClient.setQueryData(queryKeys.me, profile);
+      queryClient.invalidateQueries({ queryKey: ['today'] });
+    },
+  });
+}
+
 /** Soft-deletes the signed-in account, then signs out (its token stops working anyway). */
 export function useDeleteAccount() {
   const queryClient = useQueryClient();

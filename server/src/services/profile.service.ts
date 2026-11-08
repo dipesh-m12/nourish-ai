@@ -3,7 +3,11 @@ import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '../db';
 import { goals, profiles, type Goal, type Profile } from '../db/schema';
 import { AppError } from '../utils/app-error';
-import type { CreateProfileInput, OnboardingInput } from '../validators/profile.validator';
+import type {
+  CreateProfileInput,
+  OnboardingInput,
+  PreferencesInput,
+} from '../validators/profile.validator';
 import { calculateDailyTargets } from './nutrition.service';
 import { storageService } from './storage.service';
 
@@ -142,12 +146,55 @@ export const profileService = {
     return this.getById(id);
   },
 
-  async setPreferences(id: string, prefs: { showAgent: boolean }) {
+  /** Merges preference changes into what's stored (one part at a time). */
+  async setPreferences(id: string, input: PreferencesInput) {
+    const [row] = await db
+      .select({ preferences: profiles.preferences })
+      .from(profiles)
+      .where(and(eq(profiles.id, id), active));
+    if (!row) throw AppError.notFound('Profile');
+
+    const preferences = { ...row.preferences };
+    if (input.companion) {
+      const current = preferences.companion;
+      // Adopting (again) is a fresh start: a new date and no "left".
+      const adopting = input.companion.status === 'adopted';
+      preferences.companion = {
+        kind: 'cat',
+        status: input.companion.status ?? current?.status,
+        introSeen: input.companion.introSeen ?? current?.introSeen ?? false,
+        adoptedAt: adopting ? new Date().toISOString() : current?.adoptedAt,
+        leftAt: adopting ? null : (current?.leftAt ?? null),
+      };
+    }
+
     await db
       .update(profiles)
-      .set({ showAgent: prefs.showAgent })
+      .set({
+        ...(input.showAgent !== undefined && { showAgent: input.showAgent }),
+        preferences,
+      })
       .where(and(eq(profiles.id, id), active));
     return this.getById(id);
+  },
+
+  /** Called when the mood rules say she's gone (3 missed days): remembered until re-adoption. */
+  async companionLeft(id: string) {
+    const [row] = await db
+      .select({ preferences: profiles.preferences })
+      .from(profiles)
+      .where(eq(profiles.id, id));
+    const companion = row?.preferences.companion;
+    if (!companion || companion.status !== 'adopted') return;
+    await db
+      .update(profiles)
+      .set({
+        preferences: {
+          ...row.preferences,
+          companion: { ...companion, status: 'left', leftAt: new Date().toISOString() },
+        },
+      })
+      .where(eq(profiles.id, id));
   },
 
   async removeAvatar(id: string) {

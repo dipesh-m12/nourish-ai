@@ -6,6 +6,7 @@ import {
   goals,
   type Challenge,
   type ChallengeTracking,
+  profiles,
 } from '../../db/schema';
 import { AppError } from '../../utils/app-error';
 import { looksLikeImage } from '../../validators/image.validator';
@@ -13,6 +14,8 @@ import { isFoodChallenge } from '../meals/food-challenge';
 import { addDays, lastNDays, weekStart } from '../../utils/dates';
 import type { LogProgressInput } from '../../validators/challenge.validator';
 import { burnService } from '../burn/burn.service';
+import { COMPANION_NAME, companionMood } from '../companion/companion.rules';
+import { profileService } from '../profile.service';
 import { mealService } from '../meals/meal.service';
 import { verifyProof } from './proof.service';
 import { ensureTracking } from './tracking.service';
@@ -188,6 +191,53 @@ function loggedAmount(t: ChallengeTracking, requested: number | undefined, soFar
   return Math.round(amount * 100) / 100;
 }
 
+/**
+ * The companion cat on the dashboard: undecided / declined (no mood), or her mood from the
+ * challenge history. When the rules say she's left, that's saved once and sticks until re-adoption.
+ */
+async function companionView(
+  profileId: string,
+  today: string,
+  tz: number,
+  items: {
+    frequency: string;
+    progress: { goal: number; history: { date: string; value: number; active: boolean }[] };
+  }[],
+) {
+  const [row] = await db
+    .select({ preferences: profiles.preferences })
+    .from(profiles)
+    .where(eq(profiles.id, profileId));
+  const prefs = row?.preferences.companion;
+  const base = { name: COMPANION_NAME, introSeen: prefs?.introSeen ?? false };
+
+  if (!prefs?.status) return { ...base, status: 'undecided' as const, mood: null, line: null };
+  if (prefs.status === 'declined')
+    return { ...base, status: 'declined' as const, mood: null, line: null };
+  if (prefs.status === 'left') {
+    return {
+      ...base,
+      status: 'left' as const,
+      mood: 'left' as const,
+      line: `${COMPANION_NAME} left. Adopt her again?`,
+    };
+  }
+
+  const view = companionMood({
+    today,
+    adoptedOn: prefs.adoptedAt ? localDay(new Date(prefs.adoptedAt), tz) : today,
+    daily: items
+      .filter((c) => c.frequency === 'daily')
+      .map((c) => ({ goal: c.progress.goal, history: c.progress.history })),
+    acceptedCount: items.length,
+  });
+  if (view.mood === 'left') {
+    await profileService.companionLeft(profileId);
+    return { ...base, status: 'left' as const, ...view };
+  }
+  return { ...base, status: 'adopted' as const, ...view };
+}
+
 export const challengeProgressService = {
   /** Everything the dashboard needs for `today` (the user's local date). */
   async today(profileId: string, today: string, tzOffsetMinutes = 0) {
@@ -226,8 +276,11 @@ export const challengeProgressService = {
       ),
     }));
 
+    const companion = await companionView(profileId, today, tzOffsetMinutes, items);
+
     return {
       date: today,
+      companion,
       targets: goal
         ? {
             calories: goal.dailyCalories,

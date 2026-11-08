@@ -7,12 +7,16 @@ import {
   MessageSquareWarning,
   Trash2,
   type LucideIcon,
+  PawPrint,
 } from 'lucide-react-native';
 import { Children, type ReactNode, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Switch, View } from 'react-native';
 import Animated, { FadeInDown, ZoomIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { usePlan } from '@/api/plan';
+import { useToday } from '@/api/today';
+import { CatFace } from '@/components/companion/cat-face';
+import { localDate } from '@/utils/date';
 import { useDeleteAccount, useMe, useSetShowAgent } from '@/api/profiles';
 import { AvatarSheet } from '@/components/avatar-sheet';
 import { FeedbackSheet } from '@/components/feedback-sheet';
@@ -43,6 +47,8 @@ export default function ProfileScreen() {
   const deleteAccount = useDeleteAccount();
   const toast = useToast((s) => s.show);
   const setShowAgent = useSetShowAgent();
+  // Mochi's status and mood come with today's data (cached from the dashboard).
+  const companion = useToday(localDate()).data?.companion;
   const [pending, setPending] = useState<Pending>(null);
   const [avatarOpen, setAvatarOpen] = useState(false);
   const token = useSession((s) => s.token);
@@ -157,6 +163,28 @@ export default function ProfileScreen() {
             accepted.map((c) => <Row key={c.id} label={c.title} value={c.target} />)
           ) : (
             <Row label="None yet" value="" />
+          )}
+        </Section>
+
+        <Section title="Companion" delay={270}>
+          {companion?.status === 'adopted' || companion?.status === 'left' ? (
+            <Pressable
+              onPress={() => router.push('/adopt')}
+              accessibilityRole="button"
+              accessibilityLabel={`${companion.name}: ${companion.line ?? ''}`}
+              className="flex-row items-center gap-3 px-4 py-3 active:bg-bg"
+            >
+              <CatFace mood={companion.mood ?? 'normal'} size={40} />
+              <View className="flex-1">
+                <Text className="font-sans-medium">{companion.name}</Text>
+                <Text className="text-sm text-muted" numberOfLines={1}>
+                  {companion.line}
+                </Text>
+              </View>
+              <ChevronRight size={18} color={colors.muted} />
+            </Pressable>
+          ) : (
+            <ActionRow icon={PawPrint} label="Adopt a cat" onPress={() => router.push('/adopt')} />
           )}
         </Section>
 

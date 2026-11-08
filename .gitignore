@@ -17,3 +17,6 @@ dist/
 .DS_Store
 Thumbs.db
 *.log
+
+# Source art for the companion cat (1 MB PNGs). The app ships the cleaned 35 KB WebPs.
+mobile/assets/images/cat/*.png

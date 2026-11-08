@@ -9,7 +9,25 @@ export const nameQuerySchema = z.object({ name: nameField });
 
 // Ranges catch typos (e.g. 1700 cm) without excluding real people.
 /** Per-profile app preferences (just the assistant toggle for now). */
-export const preferencesSchema = z.object({ showAgent: z.boolean() });
+/**
+ * Per-profile app preferences. Each part is optional and merged into what's stored, so the app
+ * can change one thing without knowing the rest. Dates and "left" are set by the server only.
+ */
+export const preferencesSchema = z
+  .object({
+    showAgent: z.boolean().optional(),
+    companion: z
+      .object({
+        status: z.enum(['adopted', 'declined']).optional(),
+        introSeen: z.boolean().optional(),
+      })
+      .optional(),
+  })
+  .refine((v) => v.showAgent !== undefined || v.companion !== undefined, {
+    message: 'Nothing to update',
+  });
+
+export type PreferencesInput = z.infer<typeof preferencesSchema>;
 
 export const onboardingSchema = z.object({
   sex: z.enum(['female', 'male', 'other']),

@@ -30,6 +30,21 @@ export const goalTypeEnum = pgEnum('goal_type', [
   'eat_healthier',
 ]);
 
+/** The companion cat. The server owns dates and "left"; the app sets status/introSeen. */
+export interface CompanionPrefs {
+  kind: 'cat';
+  /** Missing = not decided yet (show the "Adopt a cat" pill). */
+  status?: 'adopted' | 'declined' | 'left';
+  /** Saw the adoption slides (returning users skip to the last step). */
+  introSeen?: boolean;
+  adoptedAt?: string;
+  leftAt?: string | null;
+}
+
+export interface Preferences {
+  companion?: CompanionPrefs;
+}
+
 // A profile is the user's identity (no login). Body details are filled during onboarding.
 export const profiles = pgTable(
   'profiles',
@@ -41,6 +56,8 @@ export const profiles = pgTable(
     avatarKey: text('avatar_key'),
     /** The assistant on the dashboard: null = not asked yet (show the intro), then yes or no. */
     showAgent: boolean('show_agent'),
+    /** Flexible per-profile settings (companion cat…). Shape: `Preferences`. */
+    preferences: jsonb('preferences').$type<Preferences>().notNull().default({}),
     sex: sexEnum('sex'),
     age: integer('age'),
     heightCm: real('height_cm'),
@@ -303,7 +320,7 @@ export const meals = pgTable(
 /** An inline input the assistant asks for: chips, or a number with a unit. */
 export interface AgentAsk {
   /** photo = the app opens camera/gallery and sends the picture back. */
-  kind: 'choice' | 'number' | 'photo';
+  kind: 'choice' | 'number' | 'photo' | 'challenges';
   options?: string[];
   unit?: string;
   min?: number;
