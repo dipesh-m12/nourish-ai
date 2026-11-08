@@ -3,7 +3,11 @@ import { z } from 'zod';
 import { authedProfileId } from '../middlewares/auth';
 import { billingService, type WebhookBody } from '../services/billing/billing.service';
 import { validWebhookSignature } from '../services/billing/razorpay.client';
+import { storageService } from '../services/storage.service';
 import { AppError } from '../utils/app-error';
+
+/** Uploaded once to the bucket (the app icon, 256 px). */
+const CHECKOUT_LOGO_KEY = 'brand/checkout-logo.png';
 
 const verifySchema = z.object({
   paymentId: z.string().min(5).max(64),
@@ -57,8 +61,8 @@ export const billingController = {
       key: c.keyId,
       subscription_id: c.subscriptionId,
       name: 'Nourish AI',
-      // Absolute https URL of our logo; behind nginx the real scheme is in X-Forwarded-Proto.
-      image: `${req.header('x-forwarded-proto') ?? req.protocol}://${req.get('host')}/api/static/logo.png`,
+      // Our logo instead of Razorpay's letter avatar: a signed URL to the private bucket.
+      image: await storageService.signedReadUrl(CHECKOUT_LOGO_KEY),
       description: `${c.planName} · ${c.price}`,
       prefill: { name: c.name },
       theme: { color: '#1F7A55' },
