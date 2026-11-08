@@ -1,6 +1,6 @@
 import { View } from 'react-native';
 import { StepScreen } from '@/components/onboarding/step-screen';
-import { Stepper } from '@/components/onboarding/stepper';
+import { Stepper } from '@/components/ui/stepper';
 import { ChoiceTile } from '@/components/ui/choice-tile';
 import { Text } from '@/components/ui/text';
 import { SEX_OPTIONS } from '@/constants/onboarding';
