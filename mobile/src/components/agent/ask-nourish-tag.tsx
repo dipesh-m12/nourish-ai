@@ -18,6 +18,8 @@ import { Text } from '@/components/ui/text';
 import { AgentLottie } from './agent-lottie';
 
 const IDLE_MS = 3800;
+/** Gap between the pill and the right edge of the screen. */
+const EDGE_INSET = 12;
 const EASE = Easing.inOut(Easing.sin);
 
 /**
@@ -54,8 +56,9 @@ export function AskNourishTag({ bottom }: { bottom: number }) {
   return (
     <Animated.View
       entering={FadeInRight.duration(450).delay(200)}
-      className="absolute right-3"
-      style={{ bottom }}
+      // Position via style, not className: the class didn't reach this animated wrapper, so the
+      // tag fell back to the left edge.
+      style={{ position: 'absolute', right: EDGE_INSET, bottom }}
     >
       <Animated.View style={style}>
         <PressableScale
