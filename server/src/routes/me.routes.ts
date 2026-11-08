@@ -3,6 +3,7 @@ import { activityController } from '../controllers/activity.controller';
 import { agentController } from '../controllers/agent.controller';
 import { voiceController } from '../controllers/voice.controller';
 import { exerciseController } from '../controllers/exercise.controller';
+import { briefingController } from '../controllers/briefing.controller';
 import { challengeController } from '../controllers/challenge.controller';
 import { mealController } from '../controllers/meal.controller';
 import { feedbackController } from '../controllers/feedback.controller';
@@ -40,6 +41,7 @@ router.get('/plan', planController.get);
 router.put('/challenges', validateBody(acceptChallengesSchema), planController.acceptChallenges);
 
 router.get('/today', challengeController.today);
+router.get('/briefing', briefingController.get);
 router.post('/challenges/:id/logs', validateBody(logProgressSchema), challengeController.log);
 
 router.post('/meals/analyze', validateBody(analyzeMealSchema), mealController.analyze);

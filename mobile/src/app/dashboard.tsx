@@ -1,13 +1,16 @@
 import { Redirect, router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import Animated, { FadeInDown, LinearTransition } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBriefing } from '@/api/briefing';
 import { useMe, useSetShowAgent } from '@/api/profiles';
 import { useToday } from '@/api/today';
 import { AgentIntroSheet } from '@/components/agent/agent-intro-sheet';
 import { AskNourishTag } from '@/components/agent/ask-nourish-tag';
 import { BurnSection } from '@/components/burn/burn-section';
+import { ConfettiBurst } from '@/components/confetti-burst';
+import { BriefingCard } from '@/components/dashboard/briefing-card';
 import { CalorieCard } from '@/components/dashboard/calorie-card';
 import { ChallengeCard } from '@/components/dashboard/challenge-card';
 import { MealSheet, type MealSheetRequest } from '@/components/dashboard/meal-sheet';
@@ -24,6 +27,7 @@ import { colors } from '@/constants/colors';
 import { useOnboarding } from '@/store/onboarding';
 import { useSession } from '@/store/session';
 import { useToast } from '@/store/toast';
+import type { BriefingAction } from '@/types/briefing';
 import type { TodayChallenge } from '@/types/today';
 import { localDate } from '@/utils/date';
 
@@ -56,6 +60,10 @@ export default function DashboardScreen() {
   const [proofFor, setProofFor] = useState<TodayChallenge | null>(null);
   const [mealFor, setMealFor] = useState<MealSheetRequest | null>(null);
   const [introOpen, setIntroOpen] = useState(false);
+  const [celebrating, setCelebrating] = useState(false);
+  // The PA's top card follows today's data: any log refreshes it.
+  const briefing = useBriefing(date, today.dataUpdatedAt);
+  const celebrate = useCallback(() => setCelebrating(true), []);
   const setShowAgent = useSetShowAgent();
   const toast = useToast((s) => s.show);
   const insets = useSafeAreaInsets();
@@ -83,6 +91,15 @@ export default function DashboardScreen() {
     c.logsVia === 'meal'
       ? setMealFor({ challengeId: c.id, challengeLabel: c.tracking.label ?? c.title })
       : setProofFor(c);
+
+  /** Briefing actions do the work: open the camera, the right log sheet, or Nourish with the ask. */
+  const runBriefingAction = (a: BriefingAction) => {
+    if (a.kind === 'log_meal') return setMealFor({});
+    if (a.kind === 'ask')
+      return router.push({ pathname: '/assistant', params: { prompt: a.prompt } });
+    const c = today.data?.challenges.find((x) => x.id === a.challengeId);
+    if (c) logChallenge(c);
+  };
 
   const switchProfile = async () => {
     await signOut();
@@ -171,7 +188,19 @@ export default function DashboardScreen() {
           </Pressable>
         </Animated.View>
 
-        <Animated.View entering={FadeInDown.delay(80).duration(400)} className="mt-6">
+        <Animated.View entering={FadeInDown.delay(60).duration(400)} className="mt-6">
+          <BriefingCard
+            briefing={briefing.data}
+            loading={briefing.isPending}
+            date={date}
+            onAction={runBriefingAction}
+            onCelebrate={celebrate}
+            companion={today.data?.companion}
+            onCompanion={() => router.push('/adopt')}
+          />
+        </Animated.View>
+
+        <Animated.View entering={FadeInDown.delay(80).duration(400)} className="mt-3">
           <CalorieCard
             targets={targets}
             eaten={eaten}
@@ -271,6 +300,7 @@ export default function DashboardScreen() {
       <ProofSheet challenge={proofFor} date={date} onClose={() => setProofFor(null)} />
       <MealSheet request={mealFor} date={date} onClose={() => setMealFor(null)} />
 
+      {celebrating && <ConfettiBurst onFinish={() => setCelebrating(false)} />}
       {profile.showAgent && <AskNourishTag bottom={Math.max(insets.bottom, 12) + 20} />}
       <AgentIntroSheet
         visible={introOpen}
