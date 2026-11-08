@@ -397,6 +397,80 @@ export const agentMessages = pgTable(
   ],
 );
 
+// ---------- Billing (Mochi's Club) ----------
+
+/** Plans created on Razorpay once and remembered here (key → Razorpay plan id). */
+export const billingPlans = pgTable('billing_plans', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  key: text('key').notNull().unique(),
+  razorpayPlanId: text('razorpay_plan_id').notNull().unique(),
+  name: text('name').notNull(),
+  amountPaise: integer('amount_paise').notNull(),
+  currency: text('currency').notNull().default('INR'),
+  period: text('period').notNull(),
+  interval: integer('interval').notNull().default(1),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * A user's Razorpay subscription. Access = a charge has gone through and `nextBillAt` (paid
+ * through) is in the future; each monthly charge moves it forward. Cancelling turns autopay off
+ * (no refund): access stays until `nextBillAt`, then it lapses. A new subscription taken while
+ * paid-up starts at that date and only counts once its first charge succeeds.
+ */
+export const subscriptions = pgTable(
+  'subscriptions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    profileId: uuid('profile_id')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'cascade' }),
+    planId: uuid('plan_id')
+      .notNull()
+      .references(() => billingPlans.id),
+    razorpaySubscriptionId: text('razorpay_subscription_id').notNull().unique(),
+    /** Razorpay's status: created, authenticated, active, pending, halted, cancelled, completed, expired. */
+    status: text('status').notNull().default('created'),
+    /** When the first charge is scheduled (future for an "upcoming" subscription). */
+    startAt: timestamp('start_at', { withTimezone: true }),
+    /** Paid through: access ends here unless the next charge succeeds. */
+    nextBillAt: timestamp('next_bill_at', { withTimezone: true }),
+    /** End of the whole subscription (its last scheduled charge). */
+    endsAt: timestamp('ends_at', { withTimezone: true }),
+    paidCount: integer('paid_count').notNull().default(0),
+    autoRenew: boolean('auto_renew').notNull().default(true),
+    cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('subscriptions_profile_idx').on(t.profileId)],
+);
+
+/** Every payment event we receive (webhooks + in-app verification), stored once per event id. */
+export const subscriptionEvents = pgTable(
+  'subscription_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    /** Razorpay's x-razorpay-event-id (or `verify:<payment id>`): makes retries harmless. */
+    eventId: text('event_id').notNull().unique(),
+    type: text('type').notNull(),
+    profileId: uuid('profile_id').references(() => profiles.id, { onDelete: 'set null' }),
+    subscriptionId: uuid('subscription_id').references(() => subscriptions.id, {
+      onDelete: 'set null',
+    }),
+    razorpayPaymentId: text('razorpay_payment_id'),
+    amountPaise: integer('amount_paise'),
+    payload: jsonb('payload').$type<Record<string, unknown>>().notNull(),
+    error: text('error'),
+    receivedAt: timestamp('received_at', { withTimezone: true }).notNull().defaultNow(),
+    processedAt: timestamp('processed_at', { withTimezone: true }),
+  },
+  (t) => [index('subscription_events_profile_idx').on(t.profileId, t.receivedAt)],
+);
+
+export type BillingPlan = typeof billingPlans.$inferSelect;
+export type Subscription = typeof subscriptions.$inferSelect;
+
 export type Profile = typeof profiles.$inferSelect;
 export type Goal = typeof goals.$inferSelect;
 export type Plan = typeof plans.$inferSelect;

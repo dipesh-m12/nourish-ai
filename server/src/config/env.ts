@@ -32,6 +32,10 @@ const envSchema = z.object({
   GROQ_VISION_MODEL: z.string().default('qwen/qwen3.8-27b'),
   /** Optional. Kept server-side only; see services/exercises. */
   MUSCLEWIKI_API_KEY: z.string().optional(),
+  /** Razorpay (test mode). Unset = payments answer "not set up yet"; the rest of the app works. */
+  RAZORPAY_KEY_ID: z.string().optional(),
+  RAZORPAY_KEY_SECRET: z.string().optional(),
+  RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
 });
 
 export const env = envSchema.parse(process.env);

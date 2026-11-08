@@ -9,6 +9,7 @@ import {
   type AgentMessage,
 } from '../../db/schema';
 import { AppError } from '../../utils/app-error';
+import { billingService } from '../billing/billing.service';
 import { generateStructured } from '../ai/ai.service';
 import { exerciseService } from '../exercises/exercise.service';
 import {
@@ -238,6 +239,18 @@ export const agentService = {
       );
     if (Number(recent?.n ?? 0) >= RATE_LIMIT_PER_HOUR) {
       throw new AppError(429, 'That’s a lot of messages. Take a breather and try again soon.');
+    }
+
+    // Free plan: FREE_MESSAGES in total, then Mochi's Club. 402 tells the app to show the plans.
+    const { sent } = await usage(profileId);
+    if (sent >= FREE_MESSAGES && !(await billingService.isPremium(profileId))) {
+      throw new AppError(
+        402,
+        'You’ve used your free messages. Join Mochi’s Club for unlimited Nourish.',
+        {
+          code: 'quota',
+        },
+      );
     }
 
     const conv = await conversationFor(profileId, input.date);
