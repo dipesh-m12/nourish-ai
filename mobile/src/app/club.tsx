@@ -1,7 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { Check, X } from 'lucide-react-native';
+import { Check, Smartphone, X } from 'lucide-react-native';
 import { useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Platform, Pressable, ScrollView, View } from 'react-native';
 import Animated, { FadeInDown, LinearTransition } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCancelSubscription, useStartCheckout, useSubscription } from '@/api/subscription';
@@ -14,6 +14,9 @@ import { Heading, Text } from '@/components/ui/text';
 import { colors } from '@/constants/colors';
 import { cn } from '@/lib/cn';
 import { useToast } from '@/store/toast';
+
+/** Payments need the phone app (Razorpay Checkout runs in a native WebView). */
+const WEB = Platform.OS === 'web';
 
 type Cell = true | false | string;
 
@@ -213,17 +216,31 @@ export default function ClubScreen() {
           className="border-t border-line bg-bg px-5 pt-3"
           style={{ paddingBottom: Math.max(insets.bottom, 16) }}
         >
+          {/* Checkout runs in a native WebView, which a browser can't host. */}
+          {WEB && (
+            <View
+              className="mb-3 flex-row items-center gap-3 rounded-2xl bg-accent-soft px-4 py-3"
+              accessibilityRole="alert"
+            >
+              <Smartphone size={20} color={colors.accent} />
+              <Text className="flex-1 text-sm leading-5 text-ink">
+                Joining isn’t available on the web yet. Open Nourish AI on your phone to join.
+              </Text>
+            </View>
+          )}
           <Button
             label={
               !s.configured
                 ? 'Payments coming soon'
-                : member
-                  ? `Line up next month · ${price}`
-                  : `Join Mochi’s Club · ${price}/mo`
+                : WEB
+                  ? 'Join on the mobile app'
+                  : member
+                    ? `Line up next month · ${price}`
+                    : `Join Mochi’s Club · ${price}/mo`
             }
             onPress={join}
             loading={start.isPending}
-            disabled={!s.configured}
+            disabled={!s.configured || WEB}
           />
           <Text className="mt-2 text-center text-xs text-muted">
             {member && s.current
