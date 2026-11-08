@@ -8,13 +8,16 @@ import {
   Trash2,
   type LucideIcon,
   PawPrint,
+  Sparkles,
 } from 'lucide-react-native';
 import { Children, type ReactNode, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Switch, View } from 'react-native';
 import Animated, { FadeInDown, ZoomIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { usePlan } from '@/api/plan';
+import { useSubscription } from '@/api/subscription';
 import { useToday } from '@/api/today';
+import type { SubscriptionSummary } from '@/types/subscription';
 import { CatFace } from '@/components/companion/cat-face';
 import { localDate } from '@/utils/date';
 import { useDeleteAccount, useMe, useSetShowAgent } from '@/api/profiles';
@@ -47,6 +50,7 @@ export default function ProfileScreen() {
   const deleteAccount = useDeleteAccount();
   const toast = useToast((s) => s.show);
   const setShowAgent = useSetShowAgent();
+  const billing = useSubscription().data;
   // Mochi's status and mood come with today's data (cached from the dashboard).
   const companion = useToday(localDate()).data?.companion;
   const [pending, setPending] = useState<Pending>(null);
@@ -118,6 +122,7 @@ export default function ProfileScreen() {
                 color={profile.avatarColor}
                 imageUrl={profile.avatarUrl}
                 imageKey={profile.avatarKey}
+                club={profile.club}
                 size={88}
               />
               <Text className="mt-2 font-sans-semibold text-sm text-primary">
@@ -164,6 +169,24 @@ export default function ProfileScreen() {
           ) : (
             <Row label="None yet" value="" />
           )}
+        </Section>
+
+        <Section title="Plan" delay={260}>
+          <Pressable
+            onPress={() => router.push('/club')}
+            accessibilityRole="button"
+            accessibilityLabel="Your plan"
+            className="flex-row items-center gap-3 px-4 py-3.5 active:bg-bg"
+          >
+            <Sparkles size={20} color={billing?.premium ? colors.primary : colors.ink} />
+            <View className="flex-1">
+              <Text className="font-sans-medium">{billing?.premium ? 'Mochi’s Club' : 'Free'}</Text>
+              <Text className="text-sm text-muted" numberOfLines={1}>
+                {planLine(billing)}
+              </Text>
+            </View>
+            <ChevronRight size={18} color={colors.muted} />
+          </Pressable>
         </Section>
 
         <Section title="Companion" delay={270}>
@@ -259,6 +282,19 @@ export default function ProfileScreen() {
       />
     </SafeAreaView>
   );
+}
+
+/** One line under the plan name: what's next for this user's billing. */
+function planLine(s?: SubscriptionSummary) {
+  if (!s) return '…';
+  const date = (iso: string | null) =>
+    iso ? new Date(iso).toLocaleDateString([], { day: 'numeric', month: 'short' }) : '';
+  if (s.premium && s.current) {
+    return s.current.autoRenew
+      ? `Renews ${date(s.current.nextBillAt)}`
+      : `Autopay off · until ${date(s.current.nextBillAt)}`;
+  }
+  return 'Join Mochi’s Club for unlimited Nourish';
 }
 
 function Section({

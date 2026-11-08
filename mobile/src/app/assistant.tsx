@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowUp, ChevronLeft, ListChecks } from 'lucide-react-native';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, KeyboardAvoidingView, Pressable, TextInput, View } from 'react-native';
 import Animated, { FadeInDown, FadeInUp, useReducedMotion } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,6 +11,7 @@ import {
   useSendAgentMessage,
   type ConfirmInput,
 } from '@/api/agent';
+import { useSubscription } from '@/api/subscription';
 import { ActionCard } from '@/components/agent/action-card';
 import { AgentLottie } from '@/components/agent/agent-lottie';
 import { AskInput } from '@/components/agent/ask-input';
@@ -22,6 +23,7 @@ import { PressableScale } from '@/components/ui/pressable-scale';
 import { SkeletonBlock, SkeletonGroup } from '@/components/ui/skeleton';
 import { Heading, Text } from '@/components/ui/text';
 import { colors } from '@/constants/colors';
+import { ApiError } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
 import type { Photo } from '@/lib/photo';
 import { useToast } from '@/store/toast';
@@ -52,6 +54,21 @@ export default function AssistantScreen() {
   const liveAsk = !send.isPending && last?.role === 'assistant' ? last.ask : null;
   const challengeToolsVisible = showChallenges ?? liveAsk?.kind === 'challenges';
 
+  // Free plan: after the free messages the server answers 402 → show the Club, not an error.
+  const club = useSubscription();
+  const sendFailed = useCallback(
+    (err: Error) => {
+      if (err instanceof ApiError && err.status === 402) {
+        router.push({ pathname: '/club', params: { reason: 'quota' } });
+        return;
+      }
+      toast(err.message);
+    },
+    [toast],
+  );
+  const usage = thread.data?.usage;
+  const freeLeft = usage && !club.data?.premium ? Math.max(0, usage.free - usage.sent) : null;
+
   const submit = (value: string) => {
     const message = value.trim();
     if (!message || send.isPending) return;
@@ -61,7 +78,7 @@ export default function AssistantScreen() {
     send.mutate(message, {
       onError: (err) => {
         setText(message); // keep what they typed
-        toast(err.message);
+        sendFailed(err);
       },
     });
   };
@@ -74,8 +91,8 @@ export default function AssistantScreen() {
   useEffect(() => {
     if (!prompt || promptSent.current || !thread.isSuccess) return;
     promptSent.current = true;
-    sendMessage(prompt, { onError: (err) => toast(err.message) });
-  }, [prompt, thread.isSuccess, sendMessage, toast]);
+    sendMessage(prompt, { onError: sendFailed });
+  }, [prompt, thread.isSuccess, sendMessage, sendFailed]);
 
   const scrollToEnd = () =>
     requestAnimationFrame(() => list.current?.scrollToEnd({ animated: true }));
@@ -92,7 +109,7 @@ export default function AssistantScreen() {
             setProofPhotos((old) => ({ ...old, [action.id]: photo }));
           }
         },
-        onError: (err) => toast(err.message),
+        onError: sendFailed,
       },
     );
   };
@@ -195,6 +212,21 @@ export default function AssistantScreen() {
           style={{ paddingBottom: Math.max(insets.bottom, 10) }}
         >
           {hint && <Text className="mb-1.5 px-1 text-sm text-accent">{hint}</Text>}
+          {freeLeft !== null && (
+            <Pressable
+              onPress={() => router.push('/club')}
+              accessibilityRole="button"
+              accessibilityLabel={`${freeLeft} free messages left. See Mochi's Club`}
+              className="mb-1.5 flex-row items-center gap-1 self-center px-2 py-1 active:opacity-70"
+            >
+              <Text className="text-xs text-muted">
+                {freeLeft > 0
+                  ? `${freeLeft} free message${freeLeft === 1 ? '' : 's'} left · `
+                  : 'Free messages used · '}
+              </Text>
+              <Text className="font-sans-semibold text-xs text-primary">Mochi’s Club</Text>
+            </Pressable>
+          )}
           <View className="flex-row items-center gap-2">
             {/* Own the input's padding so native multiline insets don't set the row height. */}
             <TextInput

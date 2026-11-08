@@ -183,6 +183,7 @@ export default function DashboardScreen() {
               color={profile.avatarColor}
               imageUrl={profile.avatarUrl}
               imageKey={profile.avatarKey}
+              club={profile.club}
               size={44}
             />
           </Pressable>

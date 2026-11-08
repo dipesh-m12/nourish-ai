@@ -69,6 +69,11 @@ export default function RootLayout() {
             <Stack.Screen name="exercises" options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="assistant" options={{ animation: 'slide_from_bottom' }} />
             <Stack.Screen name="adopt" options={{ animation: 'slide_from_bottom' }} />
+            <Stack.Screen name="club" options={{ animation: 'slide_from_bottom' }} />
+            <Stack.Screen
+              name="checkout"
+              options={{ animation: 'slide_from_right', gestureEnabled: false }}
+            />
             <Stack.Screen name="exercises/[id]" options={{ animation: 'slide_from_right' }} />
           </Stack>
           <OfflineBanner />
