@@ -1,6 +1,12 @@
 import { and, desc, eq, isNull } from 'drizzle-orm';
 import { db } from '../../db';
-import { activities, activityKindEnum, meals, type ActivityKind } from '../../db/schema';
+import {
+  activities,
+  activityKindEnum,
+  meals,
+  type ActivityKind,
+  type AgentAsk,
+} from '../../db/schema';
 import type { ImageUpload } from '../../validators/image.validator';
 import { activeKcalAt, MAX_SLEEP_HOURS, MET, sleepKcal } from '../burn/burn.math';
 import { burnService } from '../burn/burn.service';
@@ -17,7 +23,8 @@ export const NEEDS_PHOTO = new Set(['log_meal', 'log_activity', 'log_challenge',
 
 const LOGGABLE = new Set<string>(activityKindEnum.enumValues.filter((k) => k !== 'sleep'));
 
-export type Prepared = { kind: string; payload: Record<string, unknown> } | { error: string };
+export type Prepared =
+  { kind: string; payload: Record<string, unknown> } | { error: string; ask?: AgentAsk };
 
 /** What the user may adjust on the card before confirming. */
 export interface ConfirmInput {
@@ -34,6 +41,27 @@ export type Executed =
   { ok: true; summary: string; result: Record<string, unknown> } | { ok: false; note: string };
 
 const round = (n: number) => Math.round(n * 100) / 100;
+
+/** A client photo tool returns an estimate card, never a saved meal. */
+export async function prepareMealPhoto(
+  profileId: string,
+  date: string,
+  image: ImageUpload,
+): Promise<Prepared> {
+  const est = await mealService.analyze(profileId, { date, image });
+  if (!est.isFood) return { error: est.comment };
+  return {
+    kind: 'log_meal',
+    payload: {
+      title: est.title,
+      items: est.items,
+      totals: est.totals,
+      comment: est.comment,
+      credits: est.credits,
+      conflicts: est.conflicts,
+    },
+  };
+}
 
 /**
  * Turns the model's proposal into a card. Every number on it is computed here (meal macros from
@@ -103,6 +131,12 @@ export async function prepare(
     case 'log_challenge': {
       const c = ctx.raw.challenges.find((x) => x.id === p.challengeId);
       if (!c) return { error: 'I couldn’t find that challenge on your list.' };
+      if (c.logsVia === 'meal') {
+        return {
+          error: 'Add a meal photo so you can review the food and update your challenge together.',
+          ask: { kind: 'photo' },
+        };
+      }
       const amount =
         c.tracking.kind === 'check' ? 1 : round(p.amount > 0 ? p.amount : c.tracking.step);
       return {
@@ -117,6 +151,8 @@ export async function prepare(
           amount,
           progress: c.progress,
           proof: c.tracking.proof,
+          // Reuse the persisted dashboard widget; never ask the model to invent its layout.
+          challenge: { ...c, progress: { ...c.progress, history: c.progress.history.slice(-7) } },
         },
       };
     }
@@ -229,7 +265,12 @@ export async function execute(
         image!,
       );
       if (!verdict.verified) return { ok: false, note: verdict.note };
-      const conflicts = (payload.conflicts as unknown[]) ?? [];
+      // Only conflicts still on the plate count: removing the off-diet food in the card lifts
+      // the block, same as the meal sheet. save() re-checks the final items by name too.
+      const kept = new Set(items.map((i) => i.name.toLowerCase()));
+      const conflicts = ((payload.conflicts as { item: string }[]) ?? []).filter((c) =>
+        kept.has(c.item.toLowerCase()),
+      );
       const saved = await mealService.save(
         profileId,
         {

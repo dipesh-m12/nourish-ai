@@ -10,6 +10,7 @@ export const agentMessageSchema = z.object({
   date: localDate,
   tz,
   text: z.string().trim().min(1, 'Say something first').max(500),
+  image: imageInputSchema.optional(),
 });
 
 /** Card edits (amount, items) plus the proof photo. Each field is re-checked by the service. */

@@ -5,12 +5,13 @@ import { z } from 'zod';
  * instead of unions: every provider's structured output handles it reliably.
  */
 export const turnSchema = z.strictObject({
+  topic: z.enum(['wellness', 'app_help', 'off_topic', 'prompt_attack', 'unsafe']),
   /** What the assistant says. Short. */
   say: z.string().min(1).max(500),
   /** An inline input for the user's next answer. */
   ask: z.strictObject({
     /** photo: the app shows camera/gallery and sends the picture back (client-side tool). */
-    kind: z.enum(['none', 'choice', 'number', 'photo']),
+    kind: z.enum(['none', 'choice', 'number', 'photo', 'challenges']),
     options: z.array(z.string().max(32)).max(6),
     unit: z.string().max(12),
     min: z.number(),
@@ -60,6 +61,7 @@ export const turnSchema = z.strictObject({
       'get_meals',
       'get_activities',
       'get_profile',
+      'get_plan',
       'search_exercises',
       'suggest_exercises',
     ]),

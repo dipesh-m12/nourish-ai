@@ -1,18 +1,20 @@
-import { router } from 'expo-router';
-import { ArrowUp, ChevronLeft } from 'lucide-react-native';
-import { useRef, useState } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import { ArrowUp, ChevronLeft, ListChecks } from 'lucide-react-native';
+import { useEffect, useRef, useState } from 'react';
 import { FlatList, KeyboardAvoidingView, Pressable, TextInput, View } from 'react-native';
-import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeInUp, useReducedMotion } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   useAgentThread,
   useCancelAgentAction,
   useConfirmAgentAction,
   useSendAgentMessage,
+  type ConfirmInput,
 } from '@/api/agent';
 import { ActionCard } from '@/components/agent/action-card';
 import { AgentLottie } from '@/components/agent/agent-lottie';
 import { AskInput } from '@/components/agent/ask-input';
+import { ChallengeTools } from '@/components/agent/challenge-tools';
 import { TypingDots } from '@/components/agent/typing-dots';
 import { Button } from '@/components/ui/button';
 import { MicButton } from '@/components/ui/mic-button';
@@ -40,17 +42,21 @@ export default function AssistantScreen() {
   const cancel = useCancelAgentAction(date);
   const [text, setText] = useState('');
   const [hint, setHint] = useState<string | null>(null);
+  const [showChallenges, setShowChallenges] = useState<boolean | null>(null);
+  const [proofPhotos, setProofPhotos] = useState<Record<string, Photo>>({});
   const list = useRef<FlatList<AgentMessage>>(null);
 
   const messages = thread.data?.messages ?? [];
   const last = messages.at(-1);
   // Quick answers only make sense for the newest question.
   const liveAsk = !send.isPending && last?.role === 'assistant' ? last.ask : null;
+  const challengeToolsVisible = showChallenges ?? liveAsk?.kind === 'challenges';
 
   const submit = (value: string) => {
     const message = value.trim();
     if (!message || send.isPending) return;
     setHint(null);
+    setShowChallenges(null);
     setText('');
     send.mutate(message, {
       onError: (err) => {
@@ -60,8 +66,36 @@ export default function AssistantScreen() {
     });
   };
 
+  // Opened from the dashboard briefing ("Log my sleep"): send that ask once the thread is ready,
+  // so the PA picks it up without the user retyping it.
+  const { prompt } = useLocalSearchParams<{ prompt?: string }>();
+  const promptSent = useRef(false);
+  const { mutate: sendMessage } = send; // stable across renders, unlike submit()
+  useEffect(() => {
+    if (!prompt || promptSent.current || !thread.isSuccess) return;
+    promptSent.current = true;
+    sendMessage(prompt, { onError: (err) => toast(err.message) });
+  }, [prompt, thread.isSuccess, sendMessage, toast]);
+
   const scrollToEnd = () =>
     requestAnimationFrame(() => list.current?.scrollToEnd({ animated: true }));
+
+  const submitPhoto = (photo: Photo) => {
+    if (send.isPending) return;
+    setHint(null);
+    send.mutate(
+      { text: 'Please review this meal photo.', photo },
+      {
+        onSuccess: ({ messages }) => {
+          const action = messages.at(-1)?.action;
+          if (action?.kind === 'log_meal' && action.status === 'proposed') {
+            setProofPhotos((old) => ({ ...old, [action.id]: photo }));
+          }
+        },
+        onError: (err) => toast(err.message),
+      },
+    );
+  };
 
   return (
     <SafeAreaView className="flex-1 bg-bg" edges={['top']}>
@@ -82,6 +116,16 @@ export default function AssistantScreen() {
             {send.isPending ? 'Thinking…' : 'Logs it for you, nudges you on time'}
           </Text>
         </View>
+        <Pressable
+          onPress={() => setShowChallenges(!challengeToolsVisible)}
+          accessibilityRole="button"
+          accessibilityLabel="Show your challenges in chat"
+          accessibilityState={{ expanded: challengeToolsVisible }}
+          className="min-h-12 items-center justify-center gap-1 px-2"
+        >
+          <ListChecks size={20} color={colors.primary} />
+          <Text className="text-xs text-primary">Challenges</Text>
+        </Pressable>
       </View>
 
       <KeyboardAvoidingView behavior="padding" className="flex-1">
@@ -108,8 +152,15 @@ export default function AssistantScreen() {
             renderItem={({ item }) => (
               <Bubble
                 message={item}
-                onConfirm={async (photo) => {
-                  const r = await confirm.mutateAsync({ id: item.action!.id, photo });
+                date={date}
+                initialPhoto={item.action ? proofPhotos[item.action.id] : undefined}
+                onConfirm={async (photo, amount, items) => {
+                  const r = await confirm.mutateAsync({
+                    id: item.action!.id,
+                    photo,
+                    amount,
+                    items,
+                  });
                   return r.ok ? null : r.note;
                 }}
                 onCancel={async () => {
@@ -119,10 +170,17 @@ export default function AssistantScreen() {
             )}
             ListFooterComponent={
               <View className="gap-3 pt-3">
-                {liveAsk && <AskInput ask={liveAsk} onAnswer={submit} />}
+                {challengeToolsVisible && <ChallengeTools date={date} />}
+                {liveAsk && liveAsk.kind !== 'challenges' && !showChallenges && (
+                  <AskInput key={last!.id} ask={liveAsk} onAnswer={submit} onPhoto={submitPhoto} />
+                )}
                 {send.isPending && (
                   <>
-                    <UserBubble text={send.variables} />
+                    <UserBubble
+                      text={
+                        typeof send.variables === 'string' ? send.variables : send.variables?.text
+                      }
+                    />
                     <TypingDots />
                   </>
                 )}
@@ -137,19 +195,20 @@ export default function AssistantScreen() {
           style={{ paddingBottom: Math.max(insets.bottom, 10) }}
         >
           {hint && <Text className="mb-1.5 px-1 text-sm text-accent">{hint}</Text>}
-          <View className="flex-row items-end gap-2">
-            <View className="min-h-11 flex-1 justify-center rounded-3xl bg-card px-4 py-2">
-              <TextInput
-                value={text}
-                onChangeText={setText}
-                placeholder="Tell me what you ate, moved, slept…"
-                placeholderTextColor={colors.muted}
-                multiline
-                maxLength={500}
-                accessibilityLabel="Message Nourish"
-                className="max-h-28 py-0 font-sans text-base text-ink"
-              />
-            </View>
+          <View className="flex-row items-center gap-2">
+            {/* Own the input's padding so native multiline insets don't set the row height. */}
+            <TextInput
+              value={text}
+              onChangeText={setText}
+              placeholder="Message Nourish…"
+              placeholderTextColor={colors.muted}
+              multiline
+              textAlignVertical="top"
+              maxLength={500}
+              accessibilityLabel="Message Nourish"
+              className="min-h-11 max-h-28 flex-1 rounded-3xl bg-card px-4 py-2.5 font-sans text-base leading-6 text-ink"
+              style={{ includeFontPadding: false }}
+            />
             {text.trim() ? (
               <PressableScale
                 onPress={() => submit(text)}
@@ -177,30 +236,56 @@ export default function AssistantScreen() {
 
 interface BubbleProps {
   message: AgentMessage;
-  onConfirm: (photo?: Photo) => Promise<string | null>;
+  date: string;
+  initialPhoto?: Photo;
+  onConfirm: (
+    photo?: Photo,
+    amount?: number,
+    items?: ConfirmInput['items'],
+  ) => Promise<string | null>;
   onCancel: () => Promise<void>;
 }
 
-function Bubble({ message: m, onConfirm, onCancel }: BubbleProps) {
+function Bubble({ message: m, date, initialPhoto, onConfirm, onCancel }: BubbleProps) {
+  const reducedMotion = useReducedMotion();
   if (m.role === 'user') return <UserBubble text={m.text} />;
   return (
-    <Animated.View entering={FadeInDown.duration(300)} className="max-w-[88%] self-start">
-      <View className="rounded-2xl rounded-tl-md bg-card px-4 py-3">
-        <Text className="leading-6">{m.text}</Text>
+    <View className="w-full items-start">
+      <View className="w-full flex-row justify-start">
+        <Animated.View
+          entering={reducedMotion ? undefined : FadeInDown.duration(300)}
+          style={{ maxWidth: '85%' }}
+          className="rounded-2xl rounded-tl-md bg-card px-4 py-3"
+        >
+          <Text className="leading-6">{m.text}</Text>
+        </Animated.View>
       </View>
-      {m.action && <ActionCard action={m.action} onConfirm={onConfirm} onCancel={onCancel} />}
-    </Animated.View>
+      {m.action && (
+        <ActionCard
+          key={m.action.id}
+          action={m.action}
+          date={date}
+          initialPhoto={initialPhoto}
+          onConfirm={onConfirm}
+          onCancel={onCancel}
+        />
+      )}
+    </View>
   );
 }
 
 function UserBubble({ text }: { text?: string }) {
+  const reducedMotion = useReducedMotion();
   return (
-    <Animated.View
-      entering={FadeInUp.duration(260)}
-      className="max-w-[82%] self-end rounded-2xl rounded-tr-md bg-ink px-4 py-3"
-    >
-      <Text className="leading-6 text-white">{text}</Text>
-    </Animated.View>
+    <View className="w-full flex-row justify-end">
+      <Animated.View
+        entering={reducedMotion ? undefined : FadeInUp.duration(260)}
+        style={{ maxWidth: '82%' }}
+        className="rounded-2xl rounded-tr-md bg-ink px-4 py-3"
+      >
+        <Text className="leading-6 text-white">{text}</Text>
+      </Animated.View>
+    </View>
   );
 }
 

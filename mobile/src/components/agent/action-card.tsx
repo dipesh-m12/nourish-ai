@@ -24,6 +24,10 @@ import type {
   RemoveCard,
   SleepCard,
 } from '@/types/agent';
+import type { ConfirmInput } from '@/api/agent';
+import { MealEstimate } from '@/components/dashboard/meal-estimate';
+import { scaledItem, toEntry, type ItemEntry } from '@/utils/meal-items';
+import { ChallengeAction } from './challenge-action';
 
 const KIND_LABEL: Record<AgentAction['kind'], string> = {
   log_meal: 'Meal',
@@ -36,10 +40,20 @@ const KIND_LABEL: Record<AgentAction['kind'], string> = {
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
+/** The diet/allergy note for one food on a meal card, if it has one. */
+const conflictFor = (card: MealCard, name: string) =>
+  card.conflicts.find((c) => c.item === name)?.message ?? null;
+
 interface Props {
   action: AgentAction;
+  date: string;
+  initialPhoto?: Photo;
   /** Resolves to a note when the photo wasn't accepted (the card stays open). */
-  onConfirm: (photo?: Photo) => Promise<string | null>;
+  onConfirm: (
+    photo?: Photo,
+    amount?: number,
+    items?: ConfirmInput['items'],
+  ) => Promise<string | null>;
   onCancel: () => Promise<void>;
 }
 
@@ -47,12 +61,24 @@ interface Props {
  * What the assistant wants to do, as a card the user can read before anything changes. Logs
  * need a photo first (the AI checks it, same as everywhere else in the app).
  */
-export function ActionCard({ action, onConfirm, onCancel }: Props) {
-  const [photo, setPhoto] = useState<Photo | null>(null);
+export function ActionCard({ action, date, initialPhoto, onConfirm, onCancel }: Props) {
+  // A newly analysed photo may arrive after the thread cache renders its card.
+  const [pickedPhoto, setPhoto] = useState<Photo | null | undefined>(undefined);
+  const photo = pickedPhoto === undefined ? (initialPhoto ?? null) : pickedPhoto;
   const [note, setNote] = useState<string | null>(null);
   const [working, setWorking] = useState<'confirm' | 'cancel' | 'photo' | null>(null);
+  const [amount, setAmount] = useState<number | null>(null);
+  const challengeCard =
+    action.kind === 'log_challenge' ? (action.payload as unknown as ChallengeCard) : null;
+  const chosenAmount = amount ?? challengeCard?.amount;
   const open = action.status === 'proposed';
-  const ready = !action.needsPhoto || Boolean(photo);
+  // A meal card is editable like the dashboard's meal sheet: same entries, same editor.
+  const mealCard = action.kind === 'log_meal' ? (action.payload as unknown as MealCard) : null;
+  const [entries, setEntries] = useState<ItemEntry[]>(() =>
+    mealCard ? mealCard.items.map((i) => toEntry(i, conflictFor(mealCard, i.name))) : [],
+  );
+  const warnings = [...new Set(entries.flatMap((e) => (e.warning ? [e.warning] : [])))];
+  const ready = (!action.needsPhoto || Boolean(photo)) && (!mealCard || entries.length > 0);
 
   const choose = async (source: PhotoSource) => {
     setNote(null);
@@ -71,7 +97,16 @@ export function ActionCard({ action, onConfirm, onCancel }: Props) {
     setNote(null);
     setWorking('confirm');
     try {
-      const rejected = await onConfirm(photo ?? undefined);
+      const items = mealCard
+        ? entries.map(scaledItem).map(({ name, portion, proteinG, carbsG, fatG }) => ({
+            name,
+            portion,
+            proteinG,
+            carbsG,
+            fatG,
+          }))
+        : undefined;
+      const rejected = await onConfirm(photo ?? undefined, chosenAmount, items);
       if (rejected) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         setNote(rejected);
@@ -96,7 +131,38 @@ export function ActionCard({ action, onConfirm, onCancel }: Props) {
         <Text className="font-sans-semibold text-xs uppercase tracking-wider text-muted">
           {KIND_LABEL[action.kind]}
         </Text>
-        <CardBody action={action} />
+        {challengeCard ? (
+          <ChallengeAction
+            card={challengeCard}
+            date={date}
+            amount={chosenAmount!}
+            onAmount={setAmount}
+            editable={open && working === null}
+          />
+        ) : mealCard && open ? (
+          <View className="mt-1.5">
+            <MealEstimate
+              title={mealCard.title}
+              entries={entries}
+              comment={mealCard.comment}
+              credits={mealCard.credits}
+              warnings={warnings}
+              onScale={(key, scale) =>
+                setEntries((list) => list.map((e) => (e.key === key ? { ...e, scale } : e)))
+              }
+              onRemove={(key) => {
+                const next = entries.filter((e) => e.key !== key);
+                if (warnings.length && !next.some((e) => e.warning)) {
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                }
+                setEntries(next);
+              }}
+              onAdd={(item, warning) => setEntries((list) => [...list, toEntry(item, warning)])}
+            />
+          </View>
+        ) : (
+          <CardBody action={action} />
+        )}
       </View>
 
       {open && action.needsPhoto && (
@@ -113,7 +179,8 @@ export function ActionCard({ action, onConfirm, onCancel }: Props) {
               </Text>
               <Pressable
                 onPress={() => setPhoto(null)}
-                hitSlop={8}
+                disabled={working !== null}
+                className="min-h-12 justify-center px-2"
                 accessibilityRole="button"
                 accessibilityLabel="Change photo"
               >
@@ -121,7 +188,7 @@ export function ActionCard({ action, onConfirm, onCancel }: Props) {
               </Pressable>
             </Animated.View>
           ) : (
-            <View className="flex-row gap-2">
+            <View className="gap-2">
               <PhotoButton
                 icon="camera"
                 label="Take photo"
@@ -154,10 +221,16 @@ export function ActionCard({ action, onConfirm, onCancel }: Props) {
           <Pressable
             onPress={async () => {
               setWorking('cancel');
-              await onCancel().finally(() => setWorking(null));
+              try {
+                await onCancel();
+              } catch (err) {
+                setNote(err instanceof Error ? err.message : 'Couldn’t cancel. Please try again.');
+              } finally {
+                setWorking(null);
+              }
             }}
             disabled={working !== null}
-            hitSlop={8}
+            className="min-h-12 justify-center px-2"
             accessibilityRole="button"
             accessibilityLabel="Cancel"
           >
@@ -169,7 +242,7 @@ export function ActionCard({ action, onConfirm, onCancel }: Props) {
             accessibilityRole="button"
             accessibilityLabel={action.kind === 'remove_last' ? 'Remove' : 'Confirm'}
             className={cn(
-              'h-10 min-w-28 flex-row items-center justify-center gap-1.5 rounded-full px-5',
+              'min-h-12 min-w-28 flex-row items-center justify-center gap-1.5 rounded-full px-5 py-3',
               action.kind === 'remove_last' ? 'bg-danger' : 'bg-ink',
               (!ready || working !== null) && 'opacity-40',
             )}
@@ -212,10 +285,15 @@ function PhotoButton({
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={label}
-      className="h-10 flex-1 flex-row items-center justify-center gap-2 rounded-xl bg-bg"
+      containerClassName="w-full"
+      accessibilityState={{ disabled }}
+      className={cn(
+        'min-h-14 flex-row items-center justify-center gap-3 rounded-xl bg-bg px-4 py-3',
+        disabled && 'opacity-40',
+      )}
     >
-      <Icon size={16} color={colors.ink} />
-      <Text className="font-sans-semibold text-sm">{label}</Text>
+      <Icon size={22} color={colors.ink} />
+      <Text className="font-sans-semibold">{label}</Text>
     </PressableScale>
   );
 }
@@ -281,17 +359,6 @@ function CardBody({ action }: { action: AgentAction }) {
           detail={a.minutes ? `${a.minutes} min` : `${a.calories} kcal from your tracker`}
           value={a.previewKcal}
           unit="kcal burned"
-        />
-      );
-    }
-    case 'log_challenge': {
-      const c = p as ChallengeCard;
-      return (
-        <Summary
-          title={c.label}
-          detail={c.check ? 'Done for today' : `+${c.amount} ${c.unit ?? ''}`.trim()}
-          value={null}
-          unit={`Now ${c.progress.value}/${c.progress.goal}`}
         />
       );
     }

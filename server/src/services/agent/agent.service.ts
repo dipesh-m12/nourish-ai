@@ -11,8 +11,17 @@ import {
 import { AppError } from '../../utils/app-error';
 import { generateStructured } from '../ai/ai.service';
 import { exerciseService } from '../exercises/exercise.service';
-import { execute, NEEDS_PHOTO, prepare, type ConfirmInput } from './agent.actions';
-import { buildContext, type AgentContext } from './agent.context';
+import {
+  execute,
+  NEEDS_PHOTO,
+  prepare,
+  prepareMealPhoto,
+  type ConfirmInput,
+} from './agent.actions';
+import { buildContext, readSlice, type AgentContext } from './agent.context';
+import { checkTurn, messageGuardrail, refusalFor } from './agent.guardrails';
+import { runTurnLoop } from './agent.loop';
+import type { ImageUpload } from '../../validators/image.validator';
 import { openingNudge } from './agent.nudges';
 import { AGENT_SYSTEM } from './agent.prompt';
 import { turnSchema, type Turn } from './agent.schema';
@@ -21,7 +30,6 @@ import { turnSchema, type Turn } from './agent.schema';
 export const FREE_MESSAGES = 5;
 const RATE_LIMIT_PER_HOUR = 30;
 const HISTORY_MESSAGES = 20;
-const MAX_READ_STEPS = 2;
 /** A card left unconfirmed this long can't be confirmed any more (the day has moved on). */
 const ACTION_TTL_MS = 30 * 60 * 1000;
 
@@ -52,6 +60,8 @@ const expired = (a: AgentAction) =>
 
 /** Drops "none" sentinels and anything malformed, so the app only gets usable inputs. */
 function cleanAsk(ask: Turn['ask']): AgentAsk | null {
+  if (ask.kind === 'photo') return { kind: 'photo' };
+  if (ask.kind === 'challenges') return { kind: 'challenges' };
   if (ask.kind === 'choice') {
     const options = [...new Set(ask.options.map((o) => o.trim()).filter(Boolean))].slice(0, 5);
     return options.length >= 2 ? { kind: 'choice', options } : null;
@@ -126,11 +136,22 @@ async function usage(profileId: string) {
 
 /** The conversation so far, as the model sees it (cards shown with their outcome). */
 function transcript(history: Awaited<ReturnType<typeof messagesOf>>) {
-  return history.slice(-HISTORY_MESSAGES).map((m) => ({
-    role: m.role,
-    text: m.text,
-    ...(m.action && { card: `${m.action.kind} (${m.action.status})` }),
-  }));
+  return history
+    .filter((m) => m.role !== 'user' || !messageGuardrail(m.text))
+    .slice(-HISTORY_MESSAGES)
+    .map((m) => ({
+      role: m.role,
+      text: m.text,
+      ...(m.ask && { ask: m.ask }),
+      ...(m.action && {
+        card: {
+          kind: m.action.kind,
+          status: m.action.status,
+          payload: m.action.payload,
+          result: m.action.result,
+        },
+      }),
+    }));
 }
 
 async function think(
@@ -138,32 +159,49 @@ async function think(
   history: Awaited<ReturnType<typeof messagesOf>>,
   profileId: string,
   date: string,
+  tz: number,
 ) {
-  const lookups: { tool: string; query: string; result: unknown }[] = [];
-  for (let step = 0; ; step++) {
-    const { data } = await generateStructured(
-      turnSchema,
-      {
-        system: AGENT_SYSTEM,
-        user: JSON.stringify({ data: ctx.prompt, conversation: transcript(history), lookups }),
-      },
-      undefined,
-      { fast: true }, // a chat reply is waited on: the fast provider first
-    );
-    if (data.read.tool === 'none' || step >= MAX_READ_STEPS) return data;
-
-    // Read tools: look it up, hand the answer back, think again.
-    const result =
-      data.read.tool === 'search_exercises'
-        ? (await exerciseService.list(profileId, date, { q: data.read.query, limit: 5, offset: 0 }))
-            .items
-        : (await exerciseService.forYou(profileId, date)).items;
-    lookups.push({
-      tool: data.read.tool,
-      query: data.read.query,
-      result: result.map((e) => ({ name: e.name, category: e.category, level: e.level })),
-    });
-  }
+  return runTurnLoop(
+    ctx,
+    async (context, lookups, readsRemaining) => {
+      const { data } = await generateStructured(
+        turnSchema,
+        {
+          system: AGENT_SYSTEM,
+          user: JSON.stringify({
+            data: context.prompt,
+            conversation: transcript(history),
+            lookups,
+            readsRemaining,
+          }),
+        },
+        checkTurn,
+        { fast: true },
+      );
+      return data;
+    },
+    async (tool, query, context) => {
+      if (tool === 'search_exercises' || tool === 'suggest_exercises') {
+        const result =
+          tool === 'search_exercises'
+            ? await exerciseService.list(profileId, date, { q: query, limit: 5, offset: 0 })
+            : await exerciseService.forYou(profileId, date);
+        return {
+          context,
+          result: result.items.map((e) => ({
+            id: e.id,
+            name: e.name,
+            category: e.category,
+            level: e.level,
+          })),
+        };
+      }
+      const fresh = await buildContext(profileId, date, tz);
+      const result = readSlice(fresh, tool, query);
+      if (!result) throw new Error('Unsupported read tool');
+      return { context: fresh, result };
+    },
+  );
 }
 
 // ---------- public ----------
@@ -183,7 +221,10 @@ export const agentService = {
   },
 
   /** One user message → the assistant's reply (maybe with an inline input or an action card). */
-  async send(profileId: string, input: { date: string; tz: number; text: string }) {
+  async send(
+    profileId: string,
+    input: { date: string; tz: number; text: string; image?: ImageUpload },
+  ) {
     const hourAgo = new Date(Date.now() - 60 * 60 * 1000);
     const [recent] = await db
       .select({ n: count() })
@@ -207,23 +248,56 @@ export const agentService = {
       text: input.text,
     });
 
-    const [ctx, history] = await Promise.all([
+    const blocked = messageGuardrail(input.text);
+    if (blocked) {
+      await say(conv.id, profileId, blocked);
+      return { messages: await messagesOf(conv.id), usage: await usage(profileId) };
+    }
+
+    if (input.image) {
+      const card = await prepareMealPhoto(profileId, input.date, input.image);
+      if ('error' in card) {
+        await say(conv.id, profileId, card.error, { ask: { kind: 'photo' } });
+      } else {
+        const [action] = await db
+          .insert(agentActions)
+          .values({
+            profileId,
+            conversationId: conv.id,
+            kind: card.kind,
+            payload: card.payload,
+          })
+          .returning();
+        await say(conv.id, profileId, 'Check your meal, then confirm to log it.', {
+          actionId: action!.id,
+        });
+      }
+      return { messages: await messagesOf(conv.id), usage: await usage(profileId) };
+    }
+
+    const [initialContext, history] = await Promise.all([
       buildContext(profileId, input.date, input.tz),
       messagesOf(conv.id),
     ]);
 
     let turn: Turn;
+    let ctx: AgentContext;
     try {
-      turn = await think(ctx, history, profileId, input.date);
+      const result = await think(initialContext, history, profileId, input.date, input.tz);
+      turn = result.turn;
+      ctx = result.context;
     } catch {
       await say(conv.id, profileId, 'Sorry, I couldn’t think that through just now. Try again?');
       return { messages: await messagesOf(conv.id), usage: await usage(profileId) };
     }
 
-    if (turn.propose.kind !== 'none') {
+    const refused = refusalFor(turn);
+    if (refused) {
+      await say(conv.id, profileId, refused);
+    } else if (turn.propose.kind !== 'none') {
       const card = await prepare(profileId, input.date, ctx, turn.propose);
       if ('error' in card) {
-        await say(conv.id, profileId, card.error);
+        await say(conv.id, profileId, card.error, { ask: card.ask });
       } else {
         const [action] = await db
           .insert(agentActions)

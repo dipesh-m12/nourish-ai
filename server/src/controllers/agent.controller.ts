@@ -24,6 +24,10 @@ export const agentController = {
   },
 
   async send(req: Request, res: Response) {
+    const { image } = req.body;
+    if (image && !looksLikeImage(Buffer.from(image.base64, 'base64'), image.mimeType)) {
+      throw new AppError(400, 'That file is not a valid image');
+    }
     res.json(await agentService.send(authedProfileId(req), req.body));
   },
 

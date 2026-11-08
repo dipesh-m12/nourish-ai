@@ -1,7 +1,9 @@
+import type { MealCredit, MealItem } from './meal';
 // Mirrors server/src/services/agent/agent.service.ts.
+import type { TodayChallenge } from './today';
 
 export interface AgentAsk {
-  kind: 'choice' | 'number';
+  kind: 'choice' | 'number' | 'photo' | 'challenges';
   options?: string[];
   unit?: string;
   min?: number;
@@ -48,7 +50,9 @@ export type ConfirmResult = { ok: true; messages: AgentMessage[] } | { ok: false
 // Card contents per action kind (computed on the server).
 export interface MealCard {
   title: string;
-  items: { name: string; portion: string; calories: number }[];
+  items: MealItem[];
+  comment: string;
+  credits: MealCredit[];
   totals: { calories: number; proteinG: number; carbsG: number; fatG: number };
   conflicts: { item: string; message: string }[];
 }
@@ -59,6 +63,9 @@ export interface ActivityCard {
   previewKcal: number;
 }
 export interface ChallengeCard {
+  challengeId: string;
+  /** Snapshot for stored cards; the current dashboard query takes priority. */
+  challenge?: TodayChallenge;
   label: string;
   check: boolean;
   unit: string | null;
