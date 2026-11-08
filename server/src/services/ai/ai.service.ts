@@ -2,14 +2,20 @@ import { z } from 'zod';
 import { env } from '../../config/env';
 import { GeminiProvider } from './gemini.provider';
 import { GroqProvider } from './groq.provider';
-import type { LlmProvider } from './llm-provider';
+import type { ImageInput, LlmProvider } from './llm-provider';
 
 const TIMEOUT_MS = 15_000;
 
 /** Providers in priority order. Only those with a key configured are used. */
 const providers: LlmProvider[] = [];
-if (env.GEMINI_API_KEY) providers.push(new GeminiProvider(env.GEMINI_API_KEY, env.GEMINI_MODEL));
-if (env.GROQ_API_KEY) providers.push(new GroqProvider(env.GROQ_API_KEY, env.GROQ_MODEL));
+if (env.GEMINI_API_KEY) {
+  providers.push(
+    new GeminiProvider(env.GEMINI_API_KEY, [env.GEMINI_MODEL, ...env.GEMINI_FALLBACK_MODELS]),
+  );
+}
+if (env.GROQ_API_KEY) {
+  providers.push(new GroqProvider(env.GROQ_API_KEY, env.GROQ_MODEL, env.GROQ_VISION_MODEL || null));
+}
 
 /**
  * Models sometimes wrap JSON in ```json fences or add a stray sentence, even in JSON mode.
@@ -47,15 +53,27 @@ export interface StructuredResult<T> {
  */
 export async function generateStructured<S extends z.ZodType>(
   schema: S,
-  prompt: { system: string; user: string },
+  prompt: { system: string; user: string; images?: ImageInput[] },
   check?: (data: z.output<S>) => string | null,
+  /** fast: small asks the user is waiting on (e.g. one typed food) try fast providers first. */
+  options: { fast?: boolean } = {},
 ): Promise<StructuredResult<z.output<S>>> {
   const jsonSchema = toProviderSchema(schema);
   const failures: string[] = [];
+  const needsVision = Boolean(prompt.images?.length);
 
-  for (const provider of providers) {
+  const order = options.fast
+    ? [...providers.filter((p) => p.fast), ...providers.filter((p) => !p.fast)]
+    : providers;
+
+  for (const provider of order) {
+    if (needsVision && !provider.supportsImages) continue;
     try {
-      const text = await provider.generateJson({ ...prompt, jsonSchema, timeoutMs: TIMEOUT_MS });
+      const { text, model } = await provider.generateJson({
+        ...prompt,
+        jsonSchema,
+        timeoutMs: TIMEOUT_MS,
+      });
       const parsed = schema.safeParse(extractJson(text));
       if (!parsed.success) {
         failures.push(`${provider.name}: invalid shape (${parsed.error.issues[0]?.message})`);
@@ -66,9 +84,8 @@ export async function generateStructured<S extends z.ZodType>(
         failures.push(`${provider.name}: ${problem}`);
         continue;
       }
-      if (failures.length)
-        console.warn('[ai] fell back to', provider.name, '←', failures.join(' | '));
-      return { data: parsed.data, provider: provider.name, model: provider.model };
+      if (failures.length) console.warn('[ai] fell back to', model, '←', failures.join(' | '));
+      return { data: parsed.data, provider: provider.name, model };
     } catch (err) {
       failures.push(err instanceof Error ? err.message : `${provider.name}: unknown error`);
     }
