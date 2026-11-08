@@ -23,3 +23,7 @@ mobile/assets/images/cat/*.png
 
 # Source art for the assistant intro slides (1-2 MB PNGs). The app ships the 60-100 KB WebPs in images/chat.
 mobile/assets/images/chatai/
+
+# SSH keys for the EC2 box: never in git.
+nourish-key.pem
+*.pem

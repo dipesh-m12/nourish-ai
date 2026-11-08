@@ -198,3 +198,22 @@ Rule: before building a feature, open the relevant skill and note which guidance
 - **Android recording:** `RecordingPresets.LOW_QUALITY` is .3gp/AMR (Whisper can't read it); we use HIGH_QUALITY overridden to mono 16 kHz 32 kbps AAC .m4a.
 - **Test data:** curl/node tests create throwaway profiles and soft-delete them; never leave test rows. DB `current_date` is UTC — always pass explicit local dates.
 - **Commits:** no AI co-author / "generated with" trailers (user rule). Never commit `.env`; check for the client's name before committing.
+
+## 13. Deployment (one EC2 box, Docker Compose)
+Budget-first and simple: EKS was ruled out (its control plane alone is ~$73/month). The API is stateless (JWT, files on S3, DB on Neon, Redis only for checkout locks), so scaling later = the same image on more boxes or ECS/EKS, no code change.
+
+```
+https://api.nourish.mavinash.in ─▶ nginx on the host (TLS via certbot / Let's Encrypt, auto-renew)
+                                      └─▶ 127.0.0.1:4000 ─▶ docker compose (server/docker-compose.yml, project "nourish")
+                                            ├─ server : server/Dockerfile (node:22-alpine, one stage, non-root, HEALTHCHECK /health)
+                                            └─ redis  : redis:7-alpine, internal only, no persistence, noeviction, 64 MB
+Neon Postgres + Neon S3 storage: aws-ap-southeast-1 (Singapore). Gemini / Groq / Razorpay: external.
+```
+- **Box:** EC2 t3.small, Ubuntu 24.04 LTS x86, 20 GB gp3, Elastic IP, 2 GB swap (for the image build). Security group: 22 (my IP only), 80, 443. Never open 4000 or 6379.
+- **Secrets:** `server/.env.production` exists ONLY on the box (git-ignored, `chmod 600`), loaded by `env_file`. Compose overrides `REDIS_HOST=redis`, `REDIS_PORT=6379`, `NODE_ENV=production`. Use `sslmode=verify-full` in `DATABASE_URL`. SSH keys (`*.pem`) are git-ignored.
+- **Deploy / update:** run `npm run db:migrate` from a laptop first if there are new migrations (drizzle-kit is a dev tool, not in the image), then on the box: `cd ~/nourish/server && git pull && docker compose up -d --build`. `-d` + `restart: unless-stopped` + Docker enabled on boot = survives logout and reboots.
+- **Check:** `docker compose ps` (both healthy), `curl localhost:4000/health` → `{"status":"ok","redis":true}`, `docker compose logs -f server`.
+- **Nginx site** (`/etc/nginx/sites-available/nourish`): `server_name api.nourish.mavinash.in`, `client_max_body_size 3m` (base64 photos/voice), `proxy_read_timeout 60s` (AI calls up to ~45 s), forwards Host / X-Forwarded-*. Then `certbot --nginx -d api.nourish.mavinash.in --redirect`.
+- **After go-live:** Razorpay webhook → `https://api.nourish.mavinash.in/api/webhooks/razorpay`; app build with `EXPO_PUBLIC_API_URL=https://api.nourish.mavinash.in/api` (the single `API_BASE_URL` in `mobile/src/lib/api-config.ts`; unset in dev = auto-detect the laptop via Expo).
+- **Cost:** ~$20/month (instance + disk + Elastic IP). Tear down: terminate the instance AND release the Elastic IP (an unattached EIP still bills).
+
