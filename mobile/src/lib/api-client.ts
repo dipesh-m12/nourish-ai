@@ -76,6 +76,8 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
       updateUrl: data?.error?.details?.updateUrl ?? null,
     });
   }
+  // Unblocked again (rule lowered on the server): any accepted request lifts the update screen.
+  if (res.ok && useUpdateGate.getState().required) useUpdateGate.getState().clear();
   if (!res.ok) throw new ApiError(res.status, data?.error?.message ?? 'Something went wrong');
   return data as T;
 }
