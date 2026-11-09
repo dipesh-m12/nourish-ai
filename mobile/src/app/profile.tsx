@@ -35,7 +35,10 @@ import { useToast } from '@/store/toast';
 
 type Pending = 'logout' | 'delete' | null;
 
-const labelOf = <T extends string>(options: { value: T; label: string }[], value: T | null) =>
+/** Developer section (404 preview). Off for the demo; set true to bring it back in dev builds. */
+const SHOW_DEV_TOOLS = false as boolean;
+
+const labelOf =<T extends string>(options: { value: T; label: string }[], value: T | null) =>
   options.find((o) => o.value === value)?.label ?? '—';
 
 /** Leaves the signed-in area entirely and lands on the profile picker with a fresh stack. */
@@ -245,8 +248,8 @@ export default function ProfileScreen() {
           />
         </Section>
 
-        {/* Dev builds only: a quick way to preview the 404 screen and its PostHog error. */}
-        {__DEV__ && (
+        {/* A quick way to preview the 404 screen and its PostHog error. Hidden for now; flip to show in dev. */}
+        {SHOW_DEV_TOOLS && __DEV__ && (
           <Section title="Developer" delay={400}>
             <ActionRow
               icon={Compass}
