@@ -9,7 +9,8 @@ It knows your goal **and why it matters to you**, and each day it tells you the 
 | **API** | https://api.nourish.mavinash.in/health |
 | **Android APK** (46.5 MB, arm64) | [Diawi](https://i.diawi.com/Uk9xZs) · [Expo build](https://expo.dev/accounts/dipeshmishra/projects/nourish-ai/builds/2dfc8f87-c1f9-49f3-9f1e-eab1039a723d) |
 | **App map (all screens)** | [Excalidraw mind map](https://excalidraw.com/#json=qCmSingB_UCbDygJGHdyF,xyXajJBgWpVWmEfoqatQyw) |
-| **Walkthrough (Loom)** | _link added on submission_ |
+| **Demo video** (the app, end to end) | [Watch on Google Drive](https://drive.google.com/file/d/1qdICUPqpktAGBg6irmT6ldgt6-PqAzze/view?usp=sharing) |
+| **Behind the scenes** (dashboards, Razorpay, mind map) | [Watch on Google Drive](https://drive.google.com/file/d/1vFf-FyQxtB3XP7W6_QuZMtOoixr2gUeU/view?usp=sharing) |
 
 No sign-up: pick or create a profile on the welcome screen. Data lives in Postgres, so it survives reinstalls and works across devices.
 
