@@ -8,7 +8,7 @@ It knows your goal **and why it matters to you**, and each day it tells you the 
 | **Web** (desktop + phone browsers) | https://nourish.mavinash.in |
 | **API** | https://api.nourish.mavinash.in/health |
 | **Android APK** (46.5 MB, arm64) | [Diawi](https://i.diawi.com/Uk9xZs) · [Expo build](https://expo.dev/accounts/dipeshmishra/projects/nourish-ai/builds/2dfc8f87-c1f9-49f3-9f1e-eab1039a723d) |
-| **App map (all screens)** | [Excalidraw mind map](https://excalidraw.com/#json=qCmSingB_UCbDygJGHdyF,xyXajJBgWpVWmEfoqatQyw) |
+| **App map (all screens)** ⭐ _Recommended: start here_ | [Excalidraw mind map](https://excalidraw.com/#json=qCmSingB_UCbDygJGHdyF,xyXajJBgWpVWmEfoqatQyw) |
 | **Demo video** (the app, end to end) | [Watch on Google Drive](https://drive.google.com/file/d/1qdICUPqpktAGBg6irmT6ldgt6-PqAzze/view?usp=sharing) |
 | **Behind the scenes** (dashboards, Razorpay, mind map) | [Watch on Google Drive](https://drive.google.com/file/d/1vFf-FyQxtB3XP7W6_QuZMtOoixr2gUeU/view?usp=sharing) |
 
