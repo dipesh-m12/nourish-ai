@@ -23,7 +23,7 @@ export const WHATS_NEW: { version: string; points: WhatsNewPoint[] }[] = [
         title: 'Every habit, its own way',
         body: 'Pour water, breathe, walk the map.',
       },
-      { icon: Sprout, title: 'Mochi’s garden', body: 'Your week grows as you go.' },
+      { icon: Sprout, title: 'Is it working?', body: 'Your week and your reports, at a glance.' },
     ],
   },
 ];
