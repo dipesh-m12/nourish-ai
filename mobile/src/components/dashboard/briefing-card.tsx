@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
-import { ArrowRight, Heart, PawPrint, TrendingDown } from 'lucide-react-native';
+import { ArrowRight, PawPrint } from 'lucide-react-native';
 import { useEffect } from 'react';
 import { Pressable, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown, LinearTransition } from 'react-native-reanimated';
@@ -104,17 +104,6 @@ export function BriefingCard({
                 </Text>
               </PressableScale>
             ))}
-          </View>
-        )}
-
-        <View className="mt-4 flex-row items-start gap-2 border-t border-line pt-3">
-          <Heart size={14} color={colors.accent} fill={colors.accent} style={{ marginTop: 3 }} />
-          <Text className="flex-1 text-sm leading-5 text-muted">{b.why}</Text>
-        </View>
-        {b.week && (
-          <View className="mt-2 flex-row items-start gap-2">
-            <TrendingDown size={14} color={colors.muted} style={{ marginTop: 3 }} />
-            <Text className="flex-1 text-sm leading-5 text-muted">{b.week}</Text>
           </View>
         )}
       </Animated.View>

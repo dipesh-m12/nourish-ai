@@ -1,5 +1,7 @@
-import { Check } from 'lucide-react-native';
+import { Image } from 'expo-image';
+import { useState } from 'react';
 import { View } from 'react-native';
+import Animated, { ZoomIn, useReducedMotion } from 'react-native-reanimated';
 import { ProgressRing } from '@/components/ui/progress-ring';
 import { Text } from '@/components/ui/text';
 import { CATEGORY_THEME } from '@/constants/category-theme';
@@ -123,13 +125,22 @@ export function CheckWidget({ c }: { c: TodayChallenge }) {
   const theme = CATEGORY_THEME[c.category];
   const week = c.progress.history.slice(-7);
   const done = c.progress.done;
+  // Already done when the card appeared = show the sprout still; done now = let it spring up.
+  const [doneAtStart] = useState(done);
   return (
     <View className="gap-3">
-      <View
-        className="h-14 w-14 items-center justify-center self-center rounded-full"
-        style={{ backgroundColor: done ? theme.mark : theme.track }}
-      >
-        <Check size={28} strokeWidth={3} color={done ? '#fff' : theme.mark} />
+      <View className="h-14 items-center justify-center">
+        {done ? (
+          <Sprout pop={!doneAtStart} />
+        ) : (
+          // Not done yet: an empty dashed circle, a slot waiting to be filled. (A tick here read
+          // as "done" before anything was logged; done is the sprout.)
+          <View
+            className="h-14 w-14 rounded-full border-2"
+            style={{ borderStyle: 'dashed', borderColor: theme.mark, opacity: 0.55 }}
+            accessibilityLabel="Not done yet"
+          />
+        )}
       </View>
       <View className="flex-row justify-between">
         {week.map((h) => (
@@ -158,3 +169,21 @@ export const WIDGETS = {
   tally: TallyWidget,
   check: CheckWidget,
 } as const;
+
+const SPROUT = require('@/assets/images/world/sprout.webp');
+
+/**
+ * Done today: a sprout pops up where the tick was (it grows in Mochi's garden). It springs in
+ * when ticked during this visit; cards that were already done show it still.
+ */
+function Sprout({ pop }: { pop: boolean }) {
+  const reduceMotion = useReducedMotion();
+  return (
+    <Animated.View
+      entering={pop && !reduceMotion ? ZoomIn.springify().damping(9).stiffness(180) : undefined}
+      accessibilityLabel="Done today"
+    >
+      <Image source={SPROUT} style={{ width: 62, height: 56 }} contentFit="contain" />
+    </Animated.View>
+  );
+}

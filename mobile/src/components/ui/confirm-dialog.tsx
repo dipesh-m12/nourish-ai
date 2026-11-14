@@ -15,6 +15,10 @@ interface Props {
   error?: string | null;
   onConfirm: () => void;
   onCancel: () => void;
+  /** Second button's label (default "Cancel"). */
+  cancelLabel?: string;
+  /** Tapping outside / back: just close. Defaults to onCancel. */
+  onDismiss?: () => void;
 }
 
 const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
@@ -34,13 +38,16 @@ export function ConfirmDialog({
   error,
   onConfirm,
   onCancel,
+  cancelLabel = 'Cancel',
+  onDismiss,
 }: Props) {
+  const dismiss = onDismiss ?? onCancel;
   return (
     <Modal
       visible={visible}
       transparent
       animationType="fade"
-      onRequestClose={loading ? undefined : onCancel}
+      onRequestClose={loading ? undefined : dismiss}
       statusBarTranslucent
     >
       {/* Modals render outside the app root: on desktop web, keep the dialog in the phone frame. */}
@@ -48,9 +55,9 @@ export function ConfirmDialog({
         <View className="flex-1 items-center justify-center px-8">
           <Pressable
             className="absolute inset-0 bg-black/40"
-            onPress={loading ? undefined : onCancel}
+            onPress={loading ? undefined : dismiss}
             accessibilityRole="button"
-            accessibilityLabel="Cancel"
+            accessibilityLabel="Close"
           />
           <Animated.View
             entering={ZoomIn.duration(220).easing(EASE_OUT)}
@@ -69,7 +76,7 @@ export function ConfirmDialog({
                 loading={loading}
                 variant={destructive ? 'danger' : 'primary'}
               />
-              <Button label="Cancel" variant="ghost" onPress={onCancel} disabled={loading} />
+              <Button label={cancelLabel} variant="ghost" onPress={onCancel} disabled={loading} />
             </View>
           </Animated.View>
         </View>

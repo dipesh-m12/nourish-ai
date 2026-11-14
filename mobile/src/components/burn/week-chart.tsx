@@ -11,38 +11,32 @@ import { weekdayLetter } from '@/utils/date';
 import { BURN_COLORS } from './burn-card';
 
 const BAR_HEIGHT = 96;
-/** Keeps a quiet week from drawing tiny days as full-height bars. */
-const MIN_SCALE_KCAL = 150;
 const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
 
 /**
- * Active kcal for the last 7 days as thin bars (dataviz skill: one hue, a lighter track,
- * today emphasised and labelled). Bars grow in on load and glide when a day changes.
+ * The whole burn (body + sleep + active) for the last 7 days, the same number as the big one
+ * above, so the chart and the card always agree. dataviz skill: one hue, a lighter track of
+ * the same hue, today emphasised and the only bar with a number. No total: a week's sum of
+ * whole-day burns tells nobody anything.
  */
-export function WeekChart({ week }: { week: { date: string; active: number }[] }) {
-  const max = Math.max(MIN_SCALE_KCAL, ...week.map((d) => d.active));
-  const total = week.reduce((s, d) => s + d.active, 0);
+export function WeekChart({ week }: { week: { date: string; total: number }[] }) {
+  const max = Math.max(1, ...week.map((d) => d.total));
 
   return (
     <View className="rounded-3xl bg-card p-5">
-      <View className="flex-row items-end justify-between">
-        <Text className="text-sm text-muted">Active this week</Text>
-        <Text className="font-sans-semibold">
-          {total.toLocaleString()} <Text className="text-sm text-muted">kcal</Text>
-        </Text>
-      </View>
+      <Text className="text-sm text-muted">This week</Text>
 
       <View
         className="mt-4 flex-row items-end gap-2"
         accessible
-        accessibilityLabel={`Active calories, last 7 days: ${week.map((d) => d.active).join(', ')}`}
+        accessibilityLabel={`Calories burned, last 7 days: ${week.map((d) => d.total).join(', ')}`}
       >
         {week.map((d, i) => (
           <Bar
             key={d.date}
             index={i}
-            share={d.active / max}
-            value={d.active}
+            share={d.total / max}
+            value={d.total}
             isToday={i === week.length - 1}
             letter={weekdayLetter(d.date)}
           />
@@ -69,7 +63,9 @@ function Bar({ index, share, value, isToday, letter }: BarProps) {
   return (
     <View className="flex-1 items-center gap-1.5">
       {/* Only today carries a number: the rest read as shape, not text. */}
-      <Text className="h-4 text-[11px] font-sans-semibold">{isToday && value ? value : ''}</Text>
+      <Text className="h-4 font-sans-semibold text-[11px]">
+        {isToday && value ? value.toLocaleString() : ''}
+      </Text>
       <View
         className="w-full justify-end overflow-hidden rounded-md"
         style={{ height: BAR_HEIGHT, backgroundColor: '#F6E3DD' }}
@@ -79,7 +75,7 @@ function Bar({ index, share, value, isToday, letter }: BarProps) {
           style={[style, { backgroundColor: BURN_COLORS.active, opacity: isToday ? 1 : 0.55 }]}
         />
       </View>
-      <Text className={isToday ? 'text-[10px] font-sans-semibold' : 'text-[10px] text-muted'}>
+      <Text className={isToday ? 'font-sans-semibold text-[10px]' : 'text-[10px] text-muted'}>
         {letter}
       </Text>
     </View>

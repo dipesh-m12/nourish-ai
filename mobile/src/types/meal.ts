@@ -36,6 +36,8 @@ export type MealAnalysis =
       totals: Macros;
       comment: string;
       credits: MealCredit[];
+      /** Snapped for a challenge: does it count for it, and if not, why (a few words). */
+      startedFit: { label: string; fits: boolean; note: string | null } | null;
       /** Something breaks the diet/allergies: calories still count, challenges don't. */
       dietWarning: string | null;
       /** Per item: removing that item lifts its warning and restores challenge credit. */

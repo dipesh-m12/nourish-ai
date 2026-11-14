@@ -13,6 +13,8 @@ interface Props {
   value: number;
   format?: (value: number) => string;
   className?: string;
+  /** Text colour as a style (for colours that aren't Tailwind tokens). */
+  color?: string;
 }
 
 // Ease-out (expo-animation skill): settles fast, no bounce.
@@ -24,7 +26,7 @@ const TRAVEL = 12;
  * A number that rolls in from below when it goes up and from above when it goes down, like
  * an odometer. With reduced motion on, it simply changes.
  */
-export function RollingNumber({ value, format = String, className }: Props) {
+export function RollingNumber({ value, format = String, className, color }: Props) {
   const reduceMotion = useReducedMotion();
   // Derived during render (React's "store previous props" pattern), not in an effect.
   const [prev, setPrev] = useState(value);
@@ -54,7 +56,9 @@ export function RollingNumber({ value, format = String, className }: Props) {
         key={value}
         entering={reduceMotion || Platform.OS === 'web' ? undefined : entering}
       >
-        <Text className={className}>{format(value)}</Text>
+        <Text className={className} style={color ? { color } : undefined}>
+          {format(value)}
+        </Text>
       </Animated.View>
     </View>
   );

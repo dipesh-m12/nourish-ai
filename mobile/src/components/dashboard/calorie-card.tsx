@@ -1,152 +1,281 @@
+import * as Haptics from 'expo-haptics';
 import { Camera } from 'lucide-react-native';
-import { View } from 'react-native';
-import { ActivityRings, type Ring } from '@/components/ui/activity-rings';
+import { useRef, useState } from 'react';
+import { type LayoutChangeEvent, Pressable, StyleSheet, View } from 'react-native';
+import Animated, {
+  interpolate,
+  useAnimatedRef,
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  useSharedValue,
+  scrollTo,
+  type SharedValue,
+} from 'react-native-reanimated';
+import { scheduleOnUI } from 'react-native-worklets';
+import { ActivityRings } from '@/components/ui/activity-rings';
 import { PressableScale } from '@/components/ui/pressable-scale';
+import { RollingNumber } from '@/components/ui/rolling-number';
 import { Text } from '@/components/ui/text';
-import { CATEGORY_THEME } from '@/constants/category-theme';
-import { colors } from '@/constants/colors';
+import { colors, macroColors } from '@/constants/colors';
 import type { Meal } from '@/types/meal';
-import type { Macros, TodayChallenge } from '@/types/today';
-import { fmt } from './challenge-widgets';
+import type { Macros } from '@/types/today';
 import { MealsList } from './meals-list';
 
-/** Inner rings around the calorie ring (more would get too thin to read). */
-const MAX_CHALLENGE_RINGS = 3;
-
 const MACROS = [
-  { key: 'proteinG', label: 'Protein', color: colors.primary, kcalPerG: 4 },
-  { key: 'carbsG', label: 'Carbs', color: colors.accent, kcalPerG: 4 },
-  { key: 'fatG', label: 'Fat', color: '#D99A2B', kcalPerG: 9 },
+  { key: 'proteinG', label: 'Protein' },
+  { key: 'carbsG', label: 'Carbs' },
+  { key: 'fatG', label: 'Fat' },
 ] as const;
+
+/** Both pages share one height, so swiping never makes the card jump. */
+const PAGE_H = 172;
+// Big rings; leaves ~135 px beside them for a 48 px "2,200".
+const RING = 144;
+const PAGES = 2;
+
+const thousands = (n: number) => n.toLocaleString('en-IN');
 
 interface Props {
   targets: Macros;
   eaten: Macros;
-  challenges: TodayChallenge[];
   meals: Meal[];
   date: string;
   onLogMeal: () => void;
 }
 
 /**
- * Today in one card: big concentric rings (calories outermost, then up to three daily
- * challenges), a one-line-per-ring legend, and the macro split as a single thin bar.
- * Numbers carry the meaning; labels are one word.
+ * Food today as two swipeable pages inside one card that stays put:
+ * 1. Calories: a thick ring + "860 /2,200 kcal" beside it (Apple Fitness's ring card).
+ * 2. Protein / carbs / fat: three concentric rings + a coloured value per macro.
+ * Only what's LEFT is shown (no "0 eaten / 2,100" lines): the one number that drives a choice.
+ * dataviz skill: one number per chart, hero figure >= 48 px sans, text in ink (colour only on
+ * marks), each meter's track a lighter step of its own hue, one hue for all three meters
+ * (coral/mustard failed the colour-vision check), named by label not colour.
+ * Log meal and the meals list stay below the pages, whichever page is showing.
  */
-export function CalorieCard({ targets, eaten, challenges, meals, date, onLogMeal }: Props) {
-  const left = Math.max(0, targets.calories - eaten.calories);
-  const daily = challenges.filter((c) => c.frequency === 'daily').slice(0, MAX_CHALLENGE_RINGS);
+export function CalorieCard({ targets, eaten, meals, date, onLogMeal }: Props) {
+  const [width, setWidth] = useState(0);
+  const [page, setPage] = useState(0);
+  const x = useSharedValue(0);
+  const scroller = useAnimatedRef<Animated.ScrollView>();
+  const lastPage = useRef(0);
 
-  const rings: Ring[] = [
-    {
-      key: 'kcal',
-      progress: eaten.calories / targets.calories,
-      color: colors.ink,
-      track: '#E9E7E1',
-    },
-    ...daily.map((c) => ({
-      key: c.id,
-      progress: c.progress.value / c.progress.goal,
-      color: CATEGORY_THEME[c.category].mark,
-      track: CATEGORY_THEME[c.category].track,
-    })),
-  ];
+  const onScroll = useAnimatedScrollHandler((e) => {
+    x.set(e.contentOffset.x);
+  });
 
-  // One short line per ring. Units live on each challenge's own card; the centre already
-  // says kcal left, so the calorie row only needs what's eaten.
-  const legend = [
-    { key: 'kcal', color: colors.ink, label: 'Eaten', value: String(eaten.calories) },
-    ...daily.map((c) => ({
-      key: c.id,
-      color: CATEGORY_THEME[c.category].mark,
-      label: c.tracking.label ?? c.title,
-      value: `${fmt(c.progress.value)}/${fmt(c.progress.goal)}`,
-    })),
-  ];
+  const settle = (offset: number) => {
+    if (!width) return;
+    const p = Math.round(offset / width);
+    if (p !== lastPage.current) {
+      lastPage.current = p;
+      Haptics.selectionAsync();
+      setPage(p);
+    }
+  };
+
+  const goTo = (p: number) => {
+    const to = p * width;
+    scheduleOnUI(() => {
+      'worklet';
+      scrollTo(scroller, to, 0, true);
+    });
+  };
 
   return (
-    <View className="rounded-3xl bg-card p-5">
-      <View className="mb-4 flex-row items-center justify-between">
-        <Text className="font-sans-semibold text-sm uppercase tracking-wider text-muted">
-          Today
-        </Text>
+    <View className="rounded-3xl bg-card py-5">
+      <View onLayout={(e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width)}>
+        {width > 0 && (
+          <Animated.ScrollView
+            ref={scroller}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            decelerationRate="fast"
+            onScroll={onScroll}
+            scrollEventThrottle={16}
+            onMomentumScrollEnd={(e) => settle(e.nativeEvent.contentOffset.x)}
+            accessibilityRole="adjustable"
+            accessibilityLabel={page === 0 ? 'Calories. Swipe for macros' : 'Macros'}
+          >
+            <View style={{ width, height: PAGE_H }} className="px-5">
+              <CaloriesPage targets={targets} eaten={eaten} />
+            </View>
+            <View style={{ width, height: PAGE_H }} className="px-5">
+              <MacrosPage targets={targets} eaten={eaten} />
+            </View>
+          </Animated.ScrollView>
+        )}
+        {width === 0 && <View style={{ height: PAGE_H }} />}
+      </View>
+
+      <Dots x={x} width={width} onPick={goTo} />
+
+      <View className="px-5">
         <PressableScale
           onPress={onLogMeal}
           accessibilityRole="button"
           accessibilityLabel="Log a meal with a photo"
-          className="h-9 flex-row items-center gap-1.5 rounded-full bg-ink px-3.5"
+          className="mt-4 h-12 flex-row items-center justify-center gap-2 rounded-full bg-ink"
         >
-          <Camera size={16} color="#fff" />
-          <Text className="font-sans-semibold text-sm text-white">Log meal</Text>
+          <Camera size={18} color="#fff" />
+          <Text className="font-sans-semibold text-white">Log meal</Text>
         </PressableScale>
+
+        {meals.length > 0 && (
+          <>
+            <View className="my-4 h-px bg-line" />
+            <MealsList meals={meals} date={date} />
+          </>
+        )}
       </View>
+    </View>
+  );
+}
 
-      <View className="flex-row items-center gap-4">
-        <ActivityRings rings={rings} size={156} stroke={11} gap={3}>
-          <Text className="font-sans-semibold text-2xl leading-none">{left}</Text>
-          <Text className="mt-0.5 text-[11px] text-muted">left</Text>
-        </ActivityRings>
+// Over the goal, the number turns a deeper red that still reads at 5.6:1 on white.
+const OVER_TEXT = '#B04532';
 
-        <View
-          className="flex-1 gap-3"
-          accessible
-          accessibilityLabel={`${left} kilocalories left. ${legend.map((l) => `${l.label} ${l.value}`).join(', ')}`}
-        >
-          {legend.map((l) => (
-            <View key={l.key} className="flex-row items-center gap-2">
-              <View className="h-2 w-2 rounded-full" style={{ backgroundColor: l.color }} />
-              <Text className="flex-1 text-sm text-muted" numberOfLines={1}>
-                {l.label}
-              </Text>
-              <Text className="font-sans-semibold text-sm">{l.value}</Text>
-            </View>
-          ))}
-        </View>
+/**
+ * Page 1, after Apple Fitness's Activity Ring card: a thick ring on the left; on the right a
+ * short label, then the value in the ring's own colour, the unit in small caps.
+ * The number is eaten so far; the "/2,200 kcal" under it is the goal, so the pair reads as
+ * one figure (like "52/120 kcal") instead of two sentences.
+ */
+function CaloriesPage({ targets, eaten }: { targets: Macros; eaten: Macros }) {
+  const over = eaten.calories > targets.calories;
+  const tint = over ? OVER_TEXT : colors.primary;
+  return (
+    <View
+      className="flex-1 flex-row items-center gap-4"
+      accessible
+      accessibilityLabel={`Calories: ${eaten.calories} of ${targets.calories} eaten`}
+    >
+      <ActivityRings
+        rings={[
+          {
+            key: 'kcal',
+            progress: targets.calories ? eaten.calories / targets.calories : 0,
+            color: over ? colors.accent : colors.primary,
+            track: over ? colors.accentSoft : colors.primarySoft,
+          },
+        ]}
+        size={RING}
+        stroke={24}
+        startDot
+      />
+      <View className="flex-1">
+        <Text style={[styles.label, styles.labelLarge]}>Calories</Text>
+        <RollingNumber
+          value={eaten.calories}
+          format={thousands}
+          className="font-num-bold text-5xl"
+          // Follows the ring: green on track, red once over the goal.
+          color={tint}
+        />
+        <Text style={[styles.unit, { color: tint }]}>/{thousands(targets.calories)} kcal</Text>
       </View>
-
-      <View className="my-4 h-px bg-line" />
-      <MacroSplit targets={targets} eaten={eaten} />
-
-      {meals.length > 0 && (
-        <>
-          <View className="my-4 h-px bg-line" />
-          <MealsList meals={meals} date={date} />
-        </>
-      )}
     </View>
   );
 }
 
 /**
- * Macro targets as one thin segmented bar (each part's share of the day's calories)
- * (weighted by kcal per gram) and one line of eaten/target grams.
+ * Page 2, the same card with Apple's three concentric rings (Move / Exercise / Stand there,
+ * protein / carbs / fat here) and a label + coloured value per ring on the right.
+ * Colours validated as a set with the dataviz checker; text shades all >= 4.5:1 on white.
  */
-function MacroSplit({ targets, eaten }: { targets: Macros; eaten: Macros }) {
-  const kcal = MACROS.map((m) => targets[m.key] * m.kcalPerG);
-  const total = kcal.reduce((a, b) => a + b, 0) || 1;
+function MacrosPage({ targets, eaten }: { targets: Macros; eaten: Macros }) {
   return (
-    <View
-      accessible
-      accessibilityLabel={MACROS.map(
-        (m) => `${m.label} ${eaten[m.key]} of ${targets[m.key]} grams`,
-      ).join(', ')}
-    >
-      <View className="h-2 flex-row gap-0.5 overflow-hidden rounded-full">
-        {MACROS.map((m, i) => (
-          <View key={m.key} style={{ flex: kcal[i]! / total, backgroundColor: m.color }} />
-        ))}
-      </View>
-      <View className="mt-2.5 flex-row justify-between">
+    <View className="flex-1 flex-row items-center gap-4">
+      <ActivityRings
+        rings={MACROS.map((m) => ({
+          key: m.key,
+          progress: targets[m.key] ? eaten[m.key] / targets[m.key] : 0,
+          color: macroColors[m.key].fill,
+          track: macroColors[m.key].track,
+          // Only the outer (protein) ring keeps the stub; carbs and fat start truly empty.
+          startDot: m.key === 'proteinG',
+        }))}
+        size={RING}
+        stroke={15}
+        startDot
+        gap={3}
+      />
+      <View className="flex-1 gap-3">
         {MACROS.map((m) => (
-          <View key={m.key} className="flex-row items-start">
-            <Text className="text-sm text-muted">{m.label} </Text>
-            <Text className="font-sans-semibold text-sm">
+          <View
+            key={m.key}
+            accessible
+            accessibilityLabel={`${m.label}: ${eaten[m.key]} of ${targets[m.key]} grams`}
+          >
+            <Text style={styles.label}>{m.label}</Text>
+            <Text style={[styles.macro, { color: macroColors[m.key].text }]}>
               {eaten[m.key]}
-              <Text className="text-sm text-muted">/{targets[m.key]}g</Text>
+              {/* The goal part is smaller and a step lighter, so the eaten number leads. */}
+              <Text style={[styles.macroUnit, { color: macroColors[m.key].text }]}>
+                /{targets[m.key]}g
+              </Text>
             </Text>
           </View>
         ))}
       </View>
     </View>
   );
+}
+
+// Exact sizes as styles: the Text helper merges classes, and arbitrary size classes got lost.
+const styles = StyleSheet.create({
+  // Page 2: the value is the bold, bigger part; the label is a small quiet tag above it.
+  unit: { fontFamily: 'BarlowCondensed_700Bold', fontSize: 15, lineHeight: 18, letterSpacing: 0.5 },
+  macro: {
+    fontFamily: 'BarlowCondensed_700Bold',
+    fontSize: 20,
+    lineHeight: 23,
+    letterSpacing: 0.3,
+  },
+  macroUnit: { fontFamily: 'BarlowCondensed_600SemiBold', fontSize: 13 },
+  // The label sits right on top of its value (tight line height, no gap).
+  label: { fontFamily: 'Inter_500Medium', fontSize: 11, lineHeight: 13, color: colors.muted },
+  // Page 1's label: same style as page 2's, one size up.
+  labelLarge: { fontSize: 14, lineHeight: 17 },
+});
+
+/** Two dots that follow the finger: the active one stretches into a pill. Tap to jump. */
+function Dots({
+  x,
+  width,
+  onPick,
+}: {
+  x: SharedValue<number>;
+  width: number;
+  onPick: (page: number) => void;
+}) {
+  return (
+    <View className="mt-3 flex-row justify-center gap-1.5">
+      {Array.from({ length: PAGES }, (_, i) => (
+        <Pressable
+          key={i}
+          onPress={() => onPick(i)}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel={i === 0 ? 'Show calories' : 'Show macros'}
+          className="h-4 justify-center"
+        >
+          <Dot x={x} width={width} index={i} />
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
+function Dot({ x, width, index }: { x: SharedValue<number>; width: number; index: number }) {
+  const style = useAnimatedStyle(() => {
+    const at = width ? x.get() / width : 0;
+    const near = Math.max(0, 1 - Math.abs(at - index));
+    return {
+      width: interpolate(near, [0, 1], [6, 18]),
+      opacity: interpolate(near, [0, 1], [0.3, 1]),
+    };
+  });
+  return <Animated.View className="h-1.5 rounded-full bg-ink" style={style} />;
 }

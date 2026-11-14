@@ -12,6 +12,7 @@ export interface Briefing {
     | 'meal_time'
     | 'over'
     | 'near_limit'
+    | 'priority'
     | 'protein_short'
     | 'water_behind'
     | 'streak_risk'

@@ -4,6 +4,8 @@ import { ProgressRing } from './progress-ring';
 
 export interface Ring {
   key: string;
+  /** Overrides the rings' startDot for this one ring. */
+  startDot?: boolean;
   /** 0–1 (values above 1 draw as full). */
   progress: number;
   color: string;
@@ -15,6 +17,8 @@ interface Props {
   /** Outer diameter. */
   size: number;
   stroke: number;
+  /** Draw a start dot on every ring, even at 0. */
+  startDot?: boolean;
   /** Space between rings. */
   gap?: number;
   /** Rendered in the middle of the innermost ring. */
@@ -25,7 +29,7 @@ interface Props {
  * Concentric progress rings (outermost first), each animating independently.
  * Built from stacked ProgressRings, so every ring shares the same animation and a11y behaviour.
  */
-export function ActivityRings({ rings, size, stroke, gap = 3, children }: Props) {
+export function ActivityRings({ rings, size, stroke, gap = 3, startDot, children }: Props) {
   return (
     <View style={{ width: size, height: size }} className="items-center justify-center">
       {rings.map((ring, i) => {
@@ -38,6 +42,7 @@ export function ActivityRings({ rings, size, stroke, gap = 3, children }: Props)
               stroke={stroke}
               color={ring.color}
               trackColor={ring.track}
+              startDot={ring.startDot ?? startDot}
             />
           </View>
         );

@@ -1,7 +1,7 @@
 import * as Haptics from 'expo-haptics';
-import { ShieldCheck, TriangleAlert } from 'lucide-react-native';
+import { TriangleAlert } from 'lucide-react-native';
 import { useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { View } from 'react-native';
 import Animated, { FadeIn, LinearTransition } from 'react-native-reanimated';
 import { useLogActivity } from '@/api/activities';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,6 @@ import { Text } from '@/components/ui/text';
 import { ACTIVITIES, previewKcal } from '@/constants/activities';
 import { colors } from '@/constants/colors';
 import { cn } from '@/lib/cn';
-import { PhotoPermissionError, pickPhoto, PROOF_PHOTO, type PhotoSource } from '@/lib/photo';
 import { useToast } from '@/store/toast';
 
 type Unit = 'minutes' | 'kcal';
@@ -40,8 +39,8 @@ interface Props {
 }
 
 /**
- * Log an activity: pick what, say how long (or the kcal your watch shows), add a photo. The AI
- * checks the photo; the burn card and week chart update as soon as it counts.
+ * Log an activity: pick what, say how long (or the kcal your watch shows), done. No photo since
+ * 1.1; the burn card and week chart update straight away.
  */
 export function ActivitySheet({ visible, date, kg, onClose, exercise }: Props) {
   const log = useLogActivity(date);
@@ -49,13 +48,12 @@ export function ActivitySheet({ visible, date, kg, onClose, exercise }: Props) {
   const [kindIndex, setKindIndex] = useState(0);
   const [unit, setUnit] = useState<Unit>('minutes');
   const [amounts, setAmounts] = useState({ minutes: 30, kcal: 150 });
-  const [preparing, setPreparing] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
 
   const activity = ACTIVITIES[kindIndex]!;
   const value = amounts[unit];
   const estimate = previewKcal(exercise?.met ?? activity.met, amounts.minutes, kg);
-  const busy = preparing || log.isPending;
+  const busy = log.isPending;
 
   const close = () => {
     if (busy) return;
@@ -64,41 +62,25 @@ export function ActivitySheet({ visible, date, kg, onClose, exercise }: Props) {
     onClose();
   };
 
-  const submit = async (source: PhotoSource) => {
+  const submit = () => {
     setProblem(null);
-    try {
-      setPreparing(true);
-      const photo = await pickPhoto(source, PROOF_PHOTO);
-      setPreparing(false);
-      if (!photo) return;
-      log.mutate(
-        {
-          ...(exercise ? { exerciseId: exercise.id } : { kind: activity.kind }),
-          ...(unit === 'minutes' ? { minutes: value } : { calories: value }),
-          photo,
+    log.mutate(
+      {
+        ...(exercise ? { exerciseId: exercise.id } : { kind: activity.kind }),
+        ...(unit === 'minutes' ? { minutes: value } : { calories: value }),
+      },
+      {
+        onSuccess: (r) => {
+          if (!r.verified) return setProblem(r.note);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          toast(
+            `+${r.activity.calories} kcal · ${r.activity.label}${r.credited ? ` · ${r.credited.label} ✓` : ''}`,
+          );
+          close();
         },
-        {
-          onSuccess: (r) => {
-            if (!r.verified) {
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-              setProblem(r.note);
-              return;
-            }
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            toast(`+${r.activity.calories} kcal · ${r.activity.label}`);
-            close();
-          },
-          onError: (err) => setProblem(err.message),
-        },
-      );
-    } catch (err) {
-      setPreparing(false);
-      setProblem(
-        err instanceof PhotoPermissionError
-          ? err.message
-          : 'Couldn’t open the photo. Please try again.',
-      );
-    }
+        onError: (err) => setProblem(err.message),
+      },
+    );
   };
 
   return (
@@ -107,21 +89,7 @@ export function ActivitySheet({ visible, date, kg, onClose, exercise }: Props) {
       onClose={close}
       // A library exercise is its own title; no extra label above it.
       title={exercise?.name ?? 'Log activity'}
-      footer={
-        busy ? undefined : (
-          <View className="gap-2">
-            <Button
-              label={problem ? 'Try another photo' : 'Take a photo'}
-              onPress={() => submit('camera')}
-            />
-            <Button
-              label="Choose from gallery"
-              variant="secondary"
-              onPress={() => submit('library')}
-            />
-          </View>
-        )
-      }
+      footer={<Button label="Log it" loading={busy} onPress={submit} />}
     >
       {!exercise && (
         <View className="flex-row flex-wrap gap-2">
@@ -189,26 +157,6 @@ export function ActivitySheet({ visible, date, kg, onClose, exercise }: Props) {
           )}
         </View>
       </Animated.View>
-
-      <View className="mt-5 flex-row items-start gap-2 rounded-xl bg-card p-3">
-        <ShieldCheck size={16} color={colors.primary} />
-        <Text className="flex-1 text-sm text-muted">
-          Snap you moving, the place, your gear or a tracker screen. Our AI checks it first.
-        </Text>
-      </View>
-
-      {busy && (
-        <Animated.View
-          entering={FadeIn}
-          className="items-center gap-3 py-6"
-          accessibilityLiveRegion="polite"
-        >
-          <ActivityIndicator color={colors.primary} />
-          <Text className="text-sm text-muted">
-            {preparing ? 'Preparing your photo…' : 'Checking your photo…'}
-          </Text>
-        </Animated.View>
-      )}
 
       {!busy && problem && (
         <Animated.View

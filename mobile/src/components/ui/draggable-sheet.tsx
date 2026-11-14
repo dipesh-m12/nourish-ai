@@ -17,6 +17,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { scheduleOnRN } from 'react-native-worklets';
 import { ScreenFrame } from '@/components/screen-frame';
+import { useKeyboardHeight } from '@/hooks/use-keyboard-height';
 import { colors } from '@/constants/colors';
 import { useScreenSize } from '@/hooks/use-screen-size';
 import { Heading } from './text';
@@ -27,6 +28,8 @@ interface Props {
   title: string;
   /** Pinned below the scrolling content (e.g. a Save button). */
   footer?: ReactNode;
+  /** Opens at most of the screen even when the content is short. */
+  tall?: boolean;
   children: ReactNode;
 }
 
@@ -39,9 +42,13 @@ const DISMISS_VELOCITY = 900;
  * Bottom sheet you can drag down to dismiss (by the handle/header, so it never fights the
  * list's own scrolling). Built on Gesture Handler v3 + Reanimated: works in Expo Go.
  */
-export function DraggableSheet({ visible, onClose, title, footer, children }: Props) {
+export function DraggableSheet({ visible, onClose, title, footer, tall, children }: Props) {
   const insets = useSafeAreaInsets();
   const { height } = useScreenSize();
+  const keyboard = useKeyboardHeight();
+  // 88% of the screen, but never taller than the space above the keyboard (minus the status
+  // bar): otherwise the keyboard pushes the sheet's top, and the field you tapped, off screen.
+  const room = Math.min(height * 0.88, height - keyboard - insets.top - 8);
   const offset = useSharedValue(0);
 
   useEffect(() => {
@@ -91,7 +98,7 @@ export function DraggableSheet({ visible, onClose, title, footer, children }: Pr
 
             <Animated.View
               entering={SlideInDown.duration(320).easing(EASE_SHEET)}
-              style={[sheetStyle, { maxHeight: height * 0.88 }]}
+              style={[sheetStyle, { maxHeight: room }, tall && { height: room }]}
               className="rounded-t-3xl bg-bg"
               accessibilityViewIsModal
             >

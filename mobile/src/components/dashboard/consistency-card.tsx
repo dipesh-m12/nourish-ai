@@ -1,7 +1,8 @@
-import { View } from 'react-native';
-import Animated, { FadeIn } from 'react-native-reanimated';
+import { router } from 'expo-router';
+import { Pressable, View } from 'react-native';
+import { Image } from 'expo-image';
+import Animated, { FadeIn, ZoomIn, useReducedMotion } from 'react-native-reanimated';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/constants/colors';
 import type { TodayChallenge } from '@/types/today';
 import { weekdayLetter } from '@/utils/date';
 
@@ -42,75 +43,75 @@ function perfectStreak(days: DaySummary[]): number {
   return streak;
 }
 
+const FLOWER = require('@/assets/images/world/flower-bloom.webp');
+const SPROUT = require('@/assets/images/world/sprout.webp');
+const WILTED = require('@/assets/images/world/flower-wilted.webp');
+
+/** What grew that day: all done = a flower, some = a sprout, none = wilted, not started = soil. */
+function plantFor(d: DaySummary, isToday: boolean) {
+  if (!d.active) return null;
+  if (d.done === d.active) return FLOWER;
+  if (d.done > 0) return SPROUT;
+  return isToday ? null : WILTED; // today isn't over: no wilting yet
+}
+
 /**
- * The whole timeline in one card: consistency %, perfect-day streak, missed days,
- * and the last 7 days as fill-level pills (share of daily challenges done per day).
+ * The week as Mochi's garden instead of stats: seven plants, one line. Feeling first (the
+ * reviewer's point: "any stats I have to put my mind on is not a PA").
  */
 export function ConsistencyCard({ challenges }: { challenges: TodayChallenge[] }) {
   const days = summarise(challenges);
-  const past = days.slice(0, -1).filter((d) => d.active > 0); // completed days only
-  const doneSlots = past.reduce((s, d) => s + d.done, 0);
-  const totalSlots = past.reduce((s, d) => s + d.active, 0);
-  const consistency = totalSlots ? Math.round((doneSlots / totalSlots) * 100) : null;
-  const missedDays = past.filter((d) => d.done < d.active).length;
-  const streak = perfectStreak(days);
+  const reduceMotion = useReducedMotion();
   if (!days.length) return null;
+  const week = days.slice(-7);
+  // Nothing has grown yet (first day, nothing done): an empty row of soil says nothing.
+  if (!week.some((d) => d.active > 0 && d.done > 0)) return null;
+  // The garden says it; words only for a streak worth celebrating (no "0 of 1 days" tally).
+  const streak = perfectStreak(days);
+  const line = streak >= 3 ? `${streak} perfect days in a row` : null;
 
   return (
-    <Animated.View entering={FadeIn.duration(300)} className="rounded-3xl bg-card p-5">
-      <View className="flex-row items-end justify-between">
-        <View>
-          <Text className="text-sm text-muted">Consistency</Text>
-          {/* No finished days yet → "Day 1" rather than an empty dash. */}
-          <Text className="font-sans-semibold text-4xl leading-tight">
-            {consistency === null ? 'Day 1' : `${consistency}%`}
-          </Text>
-        </View>
-        <View className="flex-row gap-5">
-          <Stat value={streak} label="Streak" />
-          <Stat value={missedDays} label="Missed" />
-        </View>
-      </View>
-
-      {/* One row, last 7 days: each pill fills from the bottom by the share of that day's
-          challenges done (empty = none, full = all). Today is outlined. */}
-      <View
-        className="mt-4 flex-row gap-2"
-        accessible
-        accessibilityLabel={`This week: ${streak} day perfect streak, ${missedDays} days with a miss`}
+    <Animated.View entering={FadeIn.duration(300)}>
+      <Pressable
+        onPress={() => router.push('/week')}
+        className="rounded-3xl bg-card px-4 pb-3 pt-4 active:opacity-90"
+        accessibilityRole="button"
+        accessibilityLabel={`Your week${line ? `: ${line}` : ''}. Open the weekly check-in`}
       >
-        {days.slice(-7).map((d, i) => {
-          const share = d.active ? d.done / d.active : 0;
-          const isToday = i === 6;
-          return (
-            <View key={d.date} className="flex-1 items-center gap-1.5">
-              <View
-                className="h-16 w-full justify-end overflow-hidden rounded-lg"
-                style={{
-                  backgroundColor: d.active ? colors.primarySoft : '#F0EEE8',
-                  borderWidth: isToday ? 1.5 : 0,
-                  borderColor: colors.ink,
-                }}
-              >
-                <View
-                  className="w-full rounded-lg"
-                  style={{ height: `${share * 100}%`, backgroundColor: colors.primary }}
-                />
+        <View className="flex-row items-end justify-between">
+          {week.map((d, i) => {
+            const isToday = i === week.length - 1;
+            const plant = plantFor(d, isToday);
+            return (
+              <View key={d.date} className="flex-1 items-center">
+                <View className="h-12 w-full items-center justify-end">
+                  {plant ? (
+                    <Animated.View
+                      entering={reduceMotion ? undefined : ZoomIn.delay(i * 60).springify()}
+                    >
+                      <Image
+                        source={plant}
+                        style={{ width: 30, height: 40 }}
+                        contentFit="contain"
+                      />
+                    </Animated.View>
+                  ) : (
+                    <View className="mb-1 h-1.5 w-6 rounded-full bg-line" />
+                  )}
+                </View>
+                <Text
+                  className={
+                    isToday ? 'mt-1 font-sans-semibold text-[10px]' : 'mt-1 text-[10px] text-muted'
+                  }
+                >
+                  {weekdayLetter(d.date)}
+                </Text>
               </View>
-              <Text className="text-[10px] text-muted">{weekdayLetter(d.date)}</Text>
-            </View>
-          );
-        })}
-      </View>
+            );
+          })}
+        </View>
+        {line && <Text className="mt-2 text-center font-sans-semibold">{line}</Text>}
+      </Pressable>
     </Animated.View>
-  );
-}
-
-function Stat({ value, label }: { value: number; label: string }) {
-  return (
-    <View className="items-end">
-      <Text className="font-sans-semibold text-xl leading-tight">{value}</Text>
-      <Text className="text-xs text-muted">{label}</Text>
-    </View>
   );
 }

@@ -25,6 +25,14 @@ export interface TodayChallenge {
   frequency: ChallengeFrequency;
   category: ChallengeCategory;
   tracking: ChallengeTracking;
+  /** Last local day it runs (inclusive); null = ongoing. */
+  endsOn: string | null;
+  /** Daily reminder on the user's clock ("07:30"), or null. */
+  remindAt: string | null;
+  /** Pinned spot for "get there" challenges. */
+  place: { lat: number; lng: number; radiusM: number } | null;
+  /** A walk or timer still running (the app was closed mid-way): the card offers "Resume". */
+  session: { id: string; kind: 'walk' | 'timer'; startedAt: string } | null;
   /** 'meal' = food challenge: logging goes through the meal flow so calories update too. */
   logsVia: 'meal' | 'proof';
   progress: {
@@ -56,12 +64,15 @@ export interface Today {
   burn: Burn;
   companion: Companion;
   challenges: TodayChallenge[];
+  /** Past their last day, waiting for "keep going" or "done". */
+  ended: { id: string; title: string; endsOn: string }[];
 }
 
 export type LogResult =
   | {
       verified: true;
-      note: string;
+      /** AI note for food (meal) logs; null for plain logs. */
+      note: string | null;
       amount: number;
       meal?: { calories: number };
       /** Set for movement/sleep challenges: the burn this log added. */

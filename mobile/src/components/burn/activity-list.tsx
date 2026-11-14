@@ -1,5 +1,6 @@
 import * as Haptics from 'expo-haptics';
-import { ChevronDown } from 'lucide-react-native';
+import { router } from 'expo-router';
+import { ChevronDown, Trophy } from 'lucide-react-native';
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import Animated, {
@@ -27,11 +28,19 @@ function duration(min: number) {
   return m ? `${h}h ${m}m` : `${h}h`;
 }
 
+interface Props {
+  items: ActivityEntry[];
+  date: string;
+  /** Body upkeep for the hours awake: first row, so the rows add up to the big number. */
+  resting: number;
+}
+
 /**
- * Today's activity folded into one line, like meals. Entries made by a challenge are shown but
- * not removable here (they belong to that challenge's log).
+ * What today's burn is made of, folded into one line until tapped: Body, then sleep and each
+ * activity with its kcal. A tracked workout opens its trophy card; one logged by hand can be
+ * removed; challenge-made ones belong to their challenge.
  */
-export function ActivityList({ items, date }: { items: ActivityEntry[]; date: string }) {
+export function ActivityList({ items, date, resting }: Props) {
   const remove = useDeleteActivity(date);
   const toast = useToast((s) => s.show);
   const [open, setOpen] = useState(false);
@@ -44,7 +53,8 @@ export function ActivityList({ items, date }: { items: ActivityEntry[]; date: st
     transform: [{ rotate: `${progress.get() * 180}deg` }],
   }));
 
-  if (!items.length) return null;
+  const count = items.length + (resting > 0 ? 1 : 0);
+  if (!count) return null;
 
   return (
     <Animated.View layout={LinearTransition.duration(250).easing(EASE_OUT)}>
@@ -53,48 +63,37 @@ export function ActivityList({ items, date }: { items: ActivityEntry[]; date: st
           Haptics.selectionAsync();
           setOpen((o) => !o);
         }}
-        hitSlop={6}
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
-        accessibilityLabel={`Your activity, ${items.length}. ${open ? 'Hide' : 'Show'}`}
-        className="flex-row items-center gap-2 active:opacity-70"
+        accessibilityLabel={`Your activity, ${count}. ${open ? 'Hide' : 'Show'}`}
+        className="min-h-11 flex-row items-center gap-2 active:opacity-70"
       >
-        <Text className="flex-1 text-sm text-muted">
-          Your activity · <Text className="font-sans-semibold text-sm">{items.length}</Text>
-        </Text>
+        <Text className="flex-1 text-sm text-muted">Your activity</Text>
         <Animated.View style={chevron}>
           <ChevronDown size={18} color={colors.muted} />
         </Animated.View>
       </Pressable>
 
       {open && (
-        <View className="mt-2 gap-1">
+        <View className="gap-1 pb-1">
+          {resting > 0 && <Row label="Body" kcal={resting} delay={0} />}
           {items.map((a, i) => (
-            <Animated.View
+            <Row
               key={a.id}
-              entering={FadeInDown.delay(i * 50)
-                .duration(260)
-                .easing(EASE_OUT)}
-              exiting={FadeOut.duration(150)}
-              layout={LinearTransition.duration(250)}
-            >
-              <Pressable
-                onPress={() => !a.fromChallenge && setPending(a)}
-                disabled={a.fromChallenge}
-                accessibilityRole="button"
-                accessibilityLabel={`${a.label}, ${duration(a.minutes)}, ${a.calories} kilocalories${a.fromChallenge ? ', from a challenge' : '. Tap to remove.'}`}
-                className="flex-row items-center gap-3 py-1.5 active:opacity-70"
-              >
-                <View className="flex-1">
-                  <Text className="font-sans-medium text-sm">{a.label}</Text>
-                  <Text className="text-xs text-muted">
-                    {duration(a.minutes)}
-                    {a.fromChallenge ? ' · from challenge' : ''}
-                  </Text>
-                </View>
-                <Text className="font-sans-semibold text-sm">{a.calories}</Text>
-              </Pressable>
-            </Animated.View>
+              label={a.label}
+              sub={duration(a.minutes)}
+              kcal={a.calories}
+              trophy={Boolean(a.sessionId)}
+              delay={(i + 1) * 50}
+              onPress={
+                a.sessionId
+                  ? () => router.push({ pathname: '/trophy/[id]', params: { id: a.sessionId! } })
+                  : a.fromChallenge
+                    ? undefined
+                    : () => setPending(a)
+              }
+              hint={a.sessionId ? 'Open the trophy card' : a.fromChallenge ? undefined : 'Remove'}
+            />
           ))}
         </View>
       )}
@@ -121,6 +120,46 @@ export function ActivityList({ items, date }: { items: ActivityEntry[]; date: st
           remove.reset();
         }}
       />
+    </Animated.View>
+  );
+}
+
+function Row({
+  label,
+  sub,
+  kcal,
+  trophy,
+  delay,
+  onPress,
+  hint,
+}: {
+  label: string;
+  sub?: string;
+  kcal: number;
+  trophy?: boolean;
+  delay: number;
+  onPress?: () => void;
+  hint?: string;
+}) {
+  return (
+    <Animated.View
+      entering={FadeInDown.delay(delay).duration(260).easing(EASE_OUT)}
+      exiting={FadeOut.duration(150)}
+    >
+      <Pressable
+        onPress={onPress}
+        disabled={!onPress}
+        accessibilityRole={onPress ? 'button' : undefined}
+        accessibilityLabel={`${label}${sub ? `, ${sub}` : ''}, ${kcal} kilocalories${hint ? `. ${hint}` : ''}`}
+        className="min-h-11 flex-row items-center gap-3 py-1 active:opacity-70"
+      >
+        <View className="flex-1">
+          <Text className="font-sans-medium text-sm">{label}</Text>
+          {sub && <Text className="text-xs text-muted">{sub}</Text>}
+        </View>
+        {trophy && <Trophy size={16} color={colors.mustard} />}
+        <Text className="font-sans-semibold text-sm">{kcal.toLocaleString()}</Text>
+      </Pressable>
     </Animated.View>
   );
 }

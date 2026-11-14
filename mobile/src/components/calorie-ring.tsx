@@ -3,6 +3,7 @@ import { View } from 'react-native';
 import Animated, {
   Easing,
   useAnimatedProps,
+  useReducedMotion,
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
@@ -18,10 +19,11 @@ const RADIUS = (SIZE - STROKE) / 2;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 const DURATION = 1400;
 
-/** Counts a number up from 0 on mount (JS side, it's just text). */
-function useCountUp(target: number, duration: number) {
+/** Counts a number up from 0 on mount (JS side, it's just text). Reduced motion: no count. */
+function useCountUp(target: number, duration: number, still: boolean) {
   const [value, setValue] = useState(0);
   useEffect(() => {
+    if (still) return;
     const start = Date.now();
     let frame: number;
     const tick = () => {
@@ -31,18 +33,20 @@ function useCountUp(target: number, duration: number) {
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [target, duration]);
-  return value;
+  }, [target, duration, still]);
+  return still ? target : value;
 }
 
 /** Ring that sweeps closed while the daily calorie target counts up — the "your plan is ready" moment. */
 export function CalorieRing({ calories }: { calories: number }) {
-  const progress = useSharedValue(0);
-  const shown = useCountUp(calories, DURATION);
+  const reduceMotion = useReducedMotion();
+  const progress = useSharedValue(reduceMotion ? 1 : 0);
+  const shown = useCountUp(calories, DURATION, reduceMotion);
 
   useEffect(() => {
+    if (reduceMotion) return;
     progress.set(withTiming(1, { duration: DURATION, easing: Easing.out(Easing.cubic) }));
-  }, [progress]);
+  }, [progress, reduceMotion]);
 
   const animatedProps = useAnimatedProps(() => ({
     strokeDashoffset: CIRCUMFERENCE * (1 - progress.get()),

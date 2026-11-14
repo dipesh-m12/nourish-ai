@@ -26,7 +26,7 @@ function timeOf(iso: string) {
 }
 
 /**
- * Today's meals, folded into one line ("Your meals · 3") so the card stays calm. Tap to open;
+ * Today's meals, folded into one line ("Your meals") so the card stays calm. Tap to open;
  * tapping a meal offers to remove it (and the progress it gave).
  */
 export function MealsList({ meals, date }: { meals: Meal[]; date: string }) {
@@ -69,9 +69,7 @@ export function MealsList({ meals, date }: { meals: Meal[]; date: string }) {
         accessibilityLabel={`Your meals, ${meals.length}. ${open ? 'Hide' : 'Show'}`}
         className="flex-row items-center gap-2 active:opacity-70"
       >
-        <Text className="flex-1 text-sm text-muted">
-          Your meals · <Text className="font-sans-semibold text-sm">{meals.length}</Text>
-        </Text>
+        <Text className="flex-1 text-sm text-muted">Your meals</Text>
         <Animated.View style={chevron}>
           <ChevronDown size={18} color={colors.muted} />
         </Animated.View>

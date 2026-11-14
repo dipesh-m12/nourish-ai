@@ -23,6 +23,12 @@ module.exports = {
         sans: ['Inter_400Regular'],
         'sans-medium': ['Inter_500Medium'],
         'sans-semibold': ['Inter_600SemiBold'],
+        'sans-bold': ['Inter_700Bold'],
+        // Big numbers only (rings, stats): narrow, so a number can be large in a small space.
+        num: ['BarlowCondensed_600SemiBold'],
+        'num-bold': ['BarlowCondensed_700Bold'],
+        'num-heavy': ['BarlowCondensed_800ExtraBold'],
+        'num-black': ['BarlowCondensed_900Black'],
         serif: ['Lora_600SemiBold'],
         'serif-bold': ['Lora_700Bold'],
       },

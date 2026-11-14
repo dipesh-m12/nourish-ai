@@ -12,6 +12,7 @@ import { colors } from '@/constants/colors';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
+const MIN_STUB = 0.025;
 
 interface Props {
   /** 0–1; values above 1 are drawn as a full ring. */
@@ -21,6 +22,8 @@ interface Props {
   color?: string;
   /** Unfilled track: a lighter step of the same hue (dataviz skill: meter track). */
   trackColor?: string;
+  /** Never draw it fully empty: below ~2.5% it shows a short stub, so the start is visible. */
+  startDot?: boolean;
   children?: ReactNode;
 }
 
@@ -31,6 +34,7 @@ export function ProgressRing({
   stroke,
   color = colors.primary,
   trackColor = colors.primarySoft,
+  startDot,
   children,
 }: Props) {
   const reduceMotion = useReducedMotion();
@@ -39,9 +43,10 @@ export function ProgressRing({
   const value = useSharedValue(0);
 
   useEffect(() => {
-    const target = Math.min(1, Math.max(0, progress));
+    // startDot: never fully empty, a short stub (~2.5%) shows where the ring begins.
+    const target = Math.min(1, Math.max(startDot ? MIN_STUB : 0, progress));
     value.set(reduceMotion ? target : withTiming(target, { duration: 700, easing: EASE_OUT }));
-  }, [progress, value, reduceMotion]);
+  }, [progress, value, reduceMotion, startDot]);
 
   const animatedProps = useAnimatedProps(() => ({
     strokeDashoffset: circumference * (1 - value.get()),

@@ -1,55 +1,33 @@
-import { router } from 'expo-router';
-import { useState } from 'react';
-import { View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { View } from 'react-native';
 import { Text } from '@/components/ui/text';
 import type { Burn } from '@/types/burn';
-import { ActivityList } from './activity-list';
-import { ActivitySheet } from './activity-sheet';
 import { BurnCard } from './burn-card';
 import { WeekChart } from './week-chart';
 
 interface Props {
   burn: Burn;
   date: string;
-  /** For kcal estimates (MET × kg × hours). */
-  kg: number;
   /** Stagger offset so the section enters after the rest of the dashboard. */
   delay: number;
 }
 
 /**
- * "Start burning today": the day's burn (breathing counted for you), tips with the user's own
- * numbers, logging with proof, and the week as a chart.
+ * "Move" on the dashboard: today's burn (its Workout button opens Exercises, where workouts
+ * start) and the week. Nothing else: the workout tiles and the library live on Exercises.
  */
-export function BurnSection({ burn, date, kg, delay }: Props) {
-  const [logging, setLogging] = useState(false);
-
+export function BurnSection({ burn, date, delay }: Props) {
   return (
     <View>
-      {/* Same header style and spacing as "Today's challenges" above. */}
+      {/* Same header style and spacing as "Challenges" above. */}
       <Animated.View entering={FadeInDown.delay(delay).duration(400)} className="mb-3">
-        <Text className="font-sans-semibold text-sm uppercase tracking-wider text-muted">
-          Start burning today
-        </Text>
+        <Text className="font-sans-semibold text-sm uppercase tracking-wider text-muted">Move</Text>
       </Animated.View>
 
       <Animated.View entering={FadeInDown.delay(delay + 80).duration(400)} className="gap-3">
-        <BurnCard
-          burn={burn}
-          kg={kg}
-          onLog={() => setLogging(true)}
-          onBrowse={() => router.push('/exercises')}
-        />
-        {burn.activities.length > 0 && (
-          <View className="rounded-3xl bg-card px-5 py-4">
-            <ActivityList items={burn.activities} date={date} />
-          </View>
-        )}
+        <BurnCard burn={burn} date={date} />
         <WeekChart week={burn.week} />
       </Animated.View>
-
-      <ActivitySheet visible={logging} date={date} kg={kg} onClose={() => setLogging(false)} />
     </View>
   );
 }

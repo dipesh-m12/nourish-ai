@@ -18,7 +18,7 @@ export function useToday(date: string) {
   });
 }
 
-/** One tap of progress, backed by a photo the server's AI verifies. */
+/** One tap of progress. A photo only for food challenges (the plate is saved as a meal). */
 export function useLogProgress(date: string) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -26,15 +26,19 @@ export function useLogProgress(date: string) {
       challengeId,
       photo,
       amount,
+      source,
     }: {
       challengeId: string;
-      photo: Photo;
+      photo?: Photo;
       amount?: number;
+      /** How it was done (stored for history): a breathing session, a tracked walk. */
+      source?: 'timer' | 'walk' | 'place';
     }) =>
       request<LogResult>(`/me/challenges/${challengeId}/logs`, {
         method: 'POST',
-        body: { date, image: photo, amount },
-        timeoutMs: AI_TIMEOUT_MS,
+        body: { date, image: photo, amount, source },
+        // Only a photo goes through the AI; a plain log is instant.
+        ...(photo && { timeoutMs: AI_TIMEOUT_MS }),
       }),
     onSuccess: (result) => {
       if (result.verified) queryClient.invalidateQueries({ queryKey: todayKey(date) });

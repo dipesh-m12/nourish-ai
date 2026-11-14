@@ -1,4 +1,6 @@
-import { Redirect, router } from 'expo-router';
+import Constants from 'expo-constants';
+import { Redirect, router, useLocalSearchParams } from 'expo-router';
+import { Bell, Mic, Plus } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import Animated, { FadeInDown, LinearTransition } from 'react-native-reanimated';
@@ -18,18 +20,26 @@ import { MealSheet, type MealSheetRequest } from '@/components/dashboard/meal-sh
 import { ConsistencyCard } from '@/components/dashboard/consistency-card';
 import { ChallengesSkeleton } from '@/components/dashboard/dashboard-skeleton';
 import { ChallengePickerSheet } from '@/components/dashboard/challenge-picker-sheet';
-import { ProofSheet } from '@/components/dashboard/proof-sheet';
+import { LogSheet, useQuickLog } from '@/components/dashboard/log-sheet';
+import { EndedCards } from '@/components/challenges/ended-card';
+import { HealthCard } from '@/components/dashboard/health-card';
+import { enablePush } from '@/hooks/use-device-registration';
+import { syncGeofences } from '@/lib/place-task';
+import { useHealthSync } from '@/hooks/use-health-sync';
+import { ChallengeMenu } from '@/components/challenges/challenge-menu';
+import { GoalSheet } from '@/components/challenges/goal-sheet';
+import { RemindersSheet } from '@/components/challenges/reminders-sheet';
 import { ProfileAvatar } from '@/components/profile-avatar';
 import { Button } from '@/components/ui/button';
 import { PressableScale } from '@/components/ui/pressable-scale';
 import { Heading, Text } from '@/components/ui/text';
-import { WhyCard } from '@/components/why-card';
 import { colors } from '@/constants/colors';
 import { useOnboarding } from '@/store/onboarding';
 import { useSession } from '@/store/session';
 import { useToast } from '@/store/toast';
 import type { BriefingAction } from '@/types/briefing';
 import type { TodayChallenge } from '@/types/today';
+import { formatFor } from '@/utils/challenge-format';
 import { localDate } from '@/utils/date';
 
 /** Pause after the dashboard settles before introducing the assistant. */
@@ -57,8 +67,13 @@ export default function DashboardScreen() {
   const { data: profile, isPending, isError, error, refetch } = useMe();
   const date = localDate();
   const today = useToday(date);
+  // Steps and sleep fill themselves in from Health Connect (Android); web gets nothing.
+  const health = useHealthSync(date, today.data?.challenges ?? []);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [proofFor, setProofFor] = useState<TodayChallenge | null>(null);
+  const [goalOpen, setGoalOpen] = useState(false);
+  const [remindersOpen, setRemindersOpen] = useState(false);
+  const [menuFor, setMenuFor] = useState<TodayChallenge | null>(null);
+  const [logFor, setLogFor] = useState<TodayChallenge | null>(null);
   const [mealFor, setMealFor] = useState<MealSheetRequest | null>(null);
   const [introOpen, setIntroOpen] = useState(false);
   const [celebrating, setCelebrating] = useState(false);
@@ -78,6 +93,42 @@ export default function DashboardScreen() {
     return () => clearTimeout(timer);
   }, [askAboutAgent]);
 
+  // "What's new" once per version, after the day has loaded (not on top of the assistant ask).
+  const version = Constants.expoConfig?.version;
+  const showWhatsNew =
+    Boolean(version) &&
+    profile?.onboarded === true &&
+    profile.preferences.whatsNewSeen !== version &&
+    !askAboutAgent &&
+    today.isSuccess &&
+    !today.isFetching;
+  useEffect(() => {
+    if (!showWhatsNew) return;
+    const timer = setTimeout(() => router.push('/whats-new'), INTRO_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [showWhatsNew]);
+
+  // Nudges are the point of a PA: ask to allow notifications once the day is on screen and
+  // no intro is in the way. Android shows its prompt only the first time; later calls just
+  // refresh the token.
+  const askPush = profile?.onboarded === true && today.isSuccess && !askAboutAgent && !introOpen;
+  useEffect(() => {
+    if (!askPush) return;
+    const timer = setTimeout(() => void enablePush(), INTRO_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [askPush]);
+
+  // Auto check-in watches today's pinned places (only if the user switched it on).
+  const placesKey = (today.data?.challenges ?? [])
+    .filter((c) => c.place)
+    .map((c) => `${c.id}:${c.progress.done}`)
+    .join();
+  useEffect(() => {
+    if (today.data) void syncGeofences(today.data.challenges);
+    // Re-sync only when the pinned places or their done state change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [placesKey]);
+
   const answerIntro = (show: boolean) =>
     setShowAgent.mutate(show, {
       onSuccess: () => {
@@ -87,11 +138,19 @@ export default function DashboardScreen() {
       onError: (err) => toast(err.message),
     });
 
-  // Food challenges log through the meal flow, so one photo moves calories AND the challenge.
-  const logChallenge = (c: TodayChallenge) =>
-    c.logsVia === 'meal'
-      ? setMealFor({ challengeId: c.id, challengeLabel: c.tracking.label ?? c.title })
-      : setProofFor(c);
+  // Food challenges log through the meal flow (one photo moves calories AND the challenge);
+  // done/not-done ones log in one tap; amounts ask "how much?" first.
+  const quickLog = useQuickLog(date);
+  const logChallenge = (c: TodayChallenge) => {
+    if (c.logsVia === 'meal')
+      return setMealFor({ challengeId: c.id, challengeLabel: c.tracking.label ?? c.title });
+    // Showing up somewhere: the map screen (pin it once, check in when there).
+    if (formatFor(c) === 'place') return router.push({ pathname: '/place', params: { id: c.id } });
+    // A walk left running reopens straight on its map.
+    if (c.session?.kind === 'walk') return router.push({ pathname: '/walk', params: { id: c.id } });
+    if (c.tracking.kind === 'check') return quickLog(c);
+    setLogFor(c);
+  };
 
   /** Briefing actions do the work: open the camera, the right log sheet, or Nourish with the ask. */
   const runBriefingAction = (a: BriefingAction) => {
@@ -101,6 +160,27 @@ export default function DashboardScreen() {
     const c = today.data?.challenges.find((x) => x.id === a.challengeId);
     if (c) logChallenge(c);
   };
+
+  // A tapped nudge lands here with what to open:
+  // /dashboard?open=meal | open=goal | open=reminders | open=challenge&id=… (other screens are their own routes).
+  // The sheet is derived from the link (no extra state); closing it clears the link.
+  const { open, id } = useLocalSearchParams<{ open?: string; id?: string }>();
+  const linked = open === 'challenge' ? today.data?.challenges.find((x) => x.id === id) : undefined;
+  const linkedMeal: MealSheetRequest | null =
+    open === 'meal'
+      ? {}
+      : linked?.logsVia === 'meal'
+        ? { challengeId: linked.id, challengeLabel: linked.tracking.label ?? linked.title }
+        : null;
+  const linkedLog = linked && linked.logsVia !== 'meal' ? linked : null;
+  const clearLink = () => {
+    if (open) router.setParams({ open: undefined, id: undefined });
+  };
+  // A link to a challenge that has since ended: drop it quietly once the day has loaded.
+  const deadLink = open === 'challenge' && !!today.data && !linked;
+  useEffect(() => {
+    if (deadLink) router.setParams({ open: undefined, id: undefined });
+  }, [deadLink]);
 
   const switchProfile = async () => {
     await signOut();
@@ -150,12 +230,11 @@ export default function DashboardScreen() {
   };
   const eaten = today.data?.eaten ?? { calories: 0, proteinG: 0, carbsG: 0, fatG: 0 };
   const challenges = today.data?.challenges ?? [];
-  const doneCount = challenges.filter((c) => c.progress.done).length;
 
   return (
     <SafeAreaView className="flex-1 bg-bg">
       <ScrollView
-        contentContainerClassName="px-5 pb-10 pt-4"
+        contentContainerClassName="px-5 pb-28 pt-4"
         refreshControl={
           <RefreshControl
             refreshing={today.isRefetching}
@@ -206,39 +285,41 @@ export default function DashboardScreen() {
           <CalorieCard
             targets={targets}
             eaten={eaten}
-            challenges={challenges}
             meals={today.data?.meals ?? []}
             date={date}
             onLogMeal={() => setMealFor({})}
           />
         </Animated.View>
 
-        {/* Challenges */}
+        {/* Challenges: one title, a count, one add button. Editing lives in each card's ⋯. */}
         <Animated.View
           entering={FadeInDown.delay(160).duration(400)}
-          className="mb-3 mt-8 flex-row items-end justify-between"
+          className="mb-3 mt-8 flex-row items-center justify-between"
         >
-          <View>
-            <Text className="font-sans-semibold text-sm uppercase tracking-wider text-muted">
-              Today’s challenges
-            </Text>
+          <Text className="font-sans-semibold text-sm uppercase tracking-wider text-muted">
+            Challenges
+          </Text>
+          <View className="flex-row gap-3">
             {challenges.length > 0 && (
-              <Text className="mt-0.5 text-sm">
-                {doneCount} of {challenges.length} done
-              </Text>
+              <PressableScale
+                onPress={() => setRemindersOpen(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Reminders"
+                // Same size and weight as the + beside it, a quieter fill.
+                className="h-9 w-9 items-center justify-center rounded-full border border-line bg-card"
+              >
+                <Bell size={18} color={colors.ink} />
+              </PressableScale>
             )}
-          </View>
-          {challenges.length > 0 && (
-            <Pressable
-              onPress={() => setPickerOpen(true)}
-              hitSlop={8}
+            <PressableScale
+              onPress={() => setGoalOpen(true)}
               accessibilityRole="button"
-              accessibilityLabel="Edit challenges"
-              className="rounded-full bg-card px-3 py-1.5 active:opacity-70"
+              accessibilityLabel="Add a challenge"
+              className="h-9 w-9 items-center justify-center rounded-full bg-ink"
             >
-              <Text className="font-sans-semibold text-sm">Edit</Text>
-            </Pressable>
-          )}
+              <Plus size={18} color="#fff" />
+            </PressableScale>
+          </View>
         </Animated.View>
 
         {today.isPending && <ChallengesSkeleton />}
@@ -252,9 +333,15 @@ export default function DashboardScreen() {
 
         {today.isSuccess && challenges.length === 0 && (
           <Animated.View entering={FadeInDown.duration(400)}>
-            <EmptyChallenges onPick={() => setPickerOpen(true)} />
+            <EmptyChallenges onPick={() => setGoalOpen(true)} />
           </Animated.View>
         )}
+
+        {health.hasAuto && health.status === 'needs_permission' && (
+          <HealthCard onAllow={() => void health.ask()} />
+        )}
+
+        {today.data && <EndedCards date={date} ended={today.data.ended ?? []} />}
 
         {challenges.length > 0 && (
           <View className="mb-3">
@@ -271,41 +358,73 @@ export default function DashboardScreen() {
               className="flex-row gap-3"
             >
               {row.map((c) => (
-                <ChallengeCard key={c.id} challenge={c} onLog={logChallenge} />
+                <ChallengeCard key={c.id} challenge={c} onLog={logChallenge} onEdit={setMenuFor} />
               ))}
               {row.length === 1 && <View className="flex-1" />}
             </Animated.View>
           ))}
         </View>
 
-        <Animated.View entering={FadeInDown.delay(320).duration(400)} className="mt-8">
-          <WhyCard why={goal.why} />
-        </Animated.View>
-
         {today.data?.burn && (
           <View className="mt-8">
-            <BurnSection
-              burn={today.data.burn}
-              date={date}
-              kg={profile.weightKg ?? 70}
-              delay={400}
-            />
+            <BurnSection burn={today.data.burn} date={date} delay={400} />
           </View>
         )}
 
         {/* Bleeds through the column's px-5 (20) and pb-10 (40) so the fade hits the screen edges. */}
         <View className="mt-32">
-          <MadeWithLove bleed={{ x: 20, bottom: 40 }} />
+          <MadeWithLove bleed={{ x: 20, bottom: 112 }} />
         </View>
       </ScrollView>
 
+      <GoalSheet
+        visible={goalOpen || open === 'goal'}
+        date={date}
+        onClose={() => {
+          setGoalOpen(false);
+          clearLink();
+        }}
+        onManage={() => {
+          setGoalOpen(false);
+          clearLink();
+          setPickerOpen(true);
+        }}
+      />
+      <RemindersSheet
+        visible={remindersOpen || open === 'reminders'}
+        date={date}
+        onClose={() => {
+          setRemindersOpen(false);
+          clearLink();
+        }}
+      />
+      <ChallengeMenu
+        challenge={menuFor && (challenges.find((c) => c.id === menuFor.id) ?? null)}
+        date={date}
+        onClose={() => setMenuFor(null)}
+      />
       <ChallengePickerSheet
         visible={pickerOpen}
         onClose={() => setPickerOpen(false)}
         onSaved={() => today.refetch()}
       />
-      <ProofSheet challenge={proofFor} date={date} onClose={() => setProofFor(null)} />
-      <MealSheet request={mealFor} date={date} onClose={() => setMealFor(null)} />
+      <LogSheet
+        key={(logFor ?? linkedLog)?.id ?? 'none'}
+        challenge={logFor ?? linkedLog}
+        date={date}
+        onClose={() => {
+          setLogFor(null);
+          clearLink();
+        }}
+      />
+      <MealSheet
+        request={mealFor ?? linkedMeal}
+        date={date}
+        onClose={() => {
+          setMealFor(null);
+          clearLink();
+        }}
+      />
 
       {celebrating && <ConfettiBurst onFinish={() => setCelebrating(false)} />}
       {profile.showAgent && <AskNourishTag bottom={Math.max(insets.bottom, 12) + 20} />}
@@ -319,20 +438,21 @@ export default function DashboardScreen() {
   );
 }
 
-/** Shown when no challenges are taken: explains the value and opens the picker. */
+/** Shown when no challenges are running: the PA asks, the user answers in their own words. */
 function EmptyChallenges({ onPick }: { onPick: () => void }) {
   return (
-    <View className="items-center rounded-3xl bg-card px-6 py-8">
-      <Text className="text-center font-sans-semibold text-lg">No challenges yet</Text>
-      <Text className="mt-1 text-center text-sm text-muted">Pick two or three to start.</Text>
-      <PressableScale
-        onPress={onPick}
-        accessibilityRole="button"
-        accessibilityLabel="Pick challenges"
-        className="mt-5 h-11 items-center justify-center rounded-full bg-ink px-6"
-      >
-        <Text className="font-sans-semibold text-white">Pick challenges</Text>
-      </PressableScale>
-    </View>
+    <PressableScale
+      onPress={onPick}
+      accessibilityRole="button"
+      accessibilityLabel="What do you want to achieve?"
+      className="flex-row items-center gap-4 rounded-3xl bg-card p-5"
+    >
+      <View className="h-12 w-12 items-center justify-center rounded-full bg-primary-soft">
+        <Mic size={22} color={colors.primary} />
+      </View>
+      <View className="flex-1">
+        <Text className="font-sans-semibold text-lg">What do you want to achieve?</Text>
+      </View>
+    </PressableScale>
   );
 }
