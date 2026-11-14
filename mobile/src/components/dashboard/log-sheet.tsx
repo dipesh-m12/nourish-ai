@@ -23,10 +23,27 @@ import { fmt } from './challenge-widgets';
  * challenges open this sheet to pick how much. Food challenges use the meal camera instead.
  */
 
+/**
+ * The challenge's "how it'll feel" line, when it is one ("steady energy all afternoon").
+ * Older plan challenges carry a full sentence instead; those stay out of the toast.
+ */
+function feelLine(why: string) {
+  const t = why.trim().replace(/\.$/, '');
+  if (!t || t.split(/\s+/).length > 8 || /[.!?]/.test(t)) return null;
+  return t.charAt(0).toLowerCase() + t.slice(1);
+}
+
+/** Finishing the day's goal is rewarded in feelings, not units (the reviewer's point). */
 function doneText(challenge: TodayChallenge, result: Extract<LogResult, { verified: true }>) {
   const { kind, unit } = challenge.tracking;
-  const progress =
-    kind === 'check' ? 'done for today' : `+${fmt(result.amount)}${unit ? ` ${unit}` : ''}`;
+  const { value, goal } = challenge.progress;
+  const finishes = kind === 'check' || (value < goal && value + result.amount >= goal);
+  const feel = finishes ? feelLine(challenge.why) : null;
+  const progress = feel
+    ? `Done · ${feel}`
+    : kind === 'check'
+      ? 'done for today'
+      : `+${fmt(result.amount)}${unit ? ` ${unit}` : ''}`;
   return result.burned ? `${progress} · ${result.burned.calories} kcal burned` : progress;
 }
 

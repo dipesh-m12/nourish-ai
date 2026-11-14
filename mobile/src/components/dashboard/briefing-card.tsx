@@ -80,6 +80,13 @@ export function BriefingCard({
         >
           {b.headline}
         </Text>
+        {/* The WHY, as a feeling tied to their own reason ("strong enough to keep up with your
+            son"): the line that makes it their assistant, not a tracker. Quiet and short. */}
+        {b.why ? (
+          <Text className="mt-1.5 text-sm leading-5 text-muted" numberOfLines={2}>
+            {b.why}
+          </Text>
+        ) : null}
 
         {b.actions.length > 0 && (
           <View className="mt-4 flex-row flex-wrap gap-2">
