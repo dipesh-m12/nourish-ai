@@ -101,7 +101,7 @@ Full-screen orb reacting to mic level → silence detection ends the turn → Wh
 ## Art needed (generate with Gemini → `mobile/assets/images/`)
 Ask before building each format; list kept in the PR for that format.
 
-## Status (2026-11-14, nothing committed, nothing tested on a phone yet)
+## Status (2026-11-15, committed, not yet tested on a phone)
 | Area | State |
 |---|---|
 | Queue: BullMQ behind `config/queue.ts`, consumers in `workers/`, sent log bulk-inserted every 2 s | done |
@@ -127,7 +127,8 @@ Ask before building each format; list kept in the PR for that format.
 | Background geofence auto check-in (opt-in, "allow all the time") | done (`lib/place-task.ts`) |
 | Sessions table: walks/timers survive the app closing, walk trophy card saved + shareable (`/trophy/[id]`), timer done notification | done; background GPS needs the next APK (foreground service on) |
 | Art: 5 redos | dropped: no screen uses them |
-| Commit, release 1.1.0 APK, deploy server + worker, then block 1.0.0 | pending (user decides) |
+| Design review pass (2026-11-15): briefing why line shown, feel-first report tips + done toasts, report markers over time on `/week`, "Your week" in Profile, starter picks for new users, rest-day streaks, night briefing, non-plate food habits | done |
+| Commit, release 1.1.0 APK, deploy server + worker, then block 1.0.0 | committed; APK, deploy, block pending (user decides) |
 
 ## Phases
 1. ✔ Native setup · timezone + queue + push + deep links · remove photo proof · edit vs log (⋯ on cards)
