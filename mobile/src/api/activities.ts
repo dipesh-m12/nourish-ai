@@ -1,7 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { request } from '@/lib/api-client';
-import { AI_TIMEOUT_MS } from '@/lib/api-config';
-import type { Photo } from '@/lib/photo';
 import type { ActivityKind, LogActivityResult } from '@/types/burn';
 import { exerciseKeys } from './exercises';
 import { todayKey } from './today';
@@ -13,19 +11,14 @@ interface LogInput {
   /** Exactly one of minutes (we compute kcal) or calories (from a watch). */
   minutes?: number;
   calories?: number;
-  photo: Photo;
 }
 
-/** An activity counts once the AI accepts the photo; then the burn card refreshes. */
+/** Logs an activity (no photo since 1.1); the burn card and exercise ticks refresh. */
 export function useLogActivity(date: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ photo, ...input }: LogInput) =>
-      request<LogActivityResult>('/me/activities', {
-        method: 'POST',
-        body: { date, ...input, image: photo },
-        timeoutMs: AI_TIMEOUT_MS,
-      }),
+    mutationFn: (input: LogInput) =>
+      request<LogActivityResult>('/me/activities', { method: 'POST', body: { date, ...input } }),
     onSuccess: (r) => {
       if (!r.verified) return;
       queryClient.invalidateQueries({ queryKey: todayKey(date) });

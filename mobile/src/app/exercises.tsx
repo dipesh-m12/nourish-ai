@@ -38,7 +38,6 @@ export default function ExercisesScreen() {
   const header = (
     <View>
       <Heading className="text-3xl">Exercises</Heading>
-      <Text className="mt-1 text-muted">Do one, snap it, and it counts toward today’s burn.</Text>
 
       <View className="mt-5 h-14 flex-row items-center gap-2 rounded-2xl bg-card pl-5 pr-3">
         <Search size={20} color={colors.muted} />

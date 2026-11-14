@@ -15,7 +15,7 @@ import { Heading, Text } from '@/components/ui/text';
 import { colors } from '@/constants/colors';
 import { localDate } from '@/utils/date';
 
-/** One exercise: the movement, what it works, how to do it, and "I did this" to log it. */
+/** One exercise: the movement, what it works, how to do it, and Start to do it timed. */
 export default function ExerciseScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const date = localDate();
@@ -129,10 +129,25 @@ export default function ExerciseScreen() {
               <Text className="text-sm text-primary">Done today</Text>
             </View>
           )}
+          {/* Start = a live timed session (3-2-1, timer, pause); done earlier = type the minutes. */}
           <Button
-            label={e.doneToday ? 'Log another round' : 'I did this'}
-            onPress={() => setLogging(true)}
+            label={e.doneToday ? 'Go again' : 'Start'}
+            onPress={() =>
+              router.push({
+                pathname: '/workout',
+                params: { exercise: e.id, name: e.name, met: String(e.met) },
+              })
+            }
           />
+          <Pressable
+            onPress={() => setLogging(true)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Already did it? Log the minutes"
+            className="mt-1 min-h-11 items-center justify-center"
+          >
+            <Text className="font-sans-semibold text-sm text-primary">Already did it?</Text>
+          </Pressable>
         </View>
       )}
 

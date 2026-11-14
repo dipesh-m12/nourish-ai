@@ -24,6 +24,8 @@ export interface ActivityEntry {
   calories: number;
   /** Made by a challenge log (removed with it, not on its own). */
   fromChallenge: boolean;
+  /** A tracked walk: tapping the row opens its trophy card. */
+  sessionId: string | null;
   createdAt: string;
 }
 
@@ -36,9 +38,17 @@ export interface Burn {
   total: number;
   restingPerHour: number;
   sleepMinutes: number;
-  week: { date: string; active: number }[];
+  /** Each day's whole burn (body + sleep + active); `active` alone kept for history. */
+  week: { date: string; active: number; total: number }[];
   activities: ActivityEntry[];
 }
 
 export type LogActivityResult =
-  { verified: true; note: string; activity: ActivityEntry } | { verified: false; note: string };
+  | {
+      verified: true;
+      note: string | null;
+      activity: ActivityEntry;
+      /** The matching challenge it also counted toward, if any. */
+      credited: { challengeId: string; label: string; amount: number } | null;
+    }
+  | { verified: false; note: string };
