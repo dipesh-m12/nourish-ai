@@ -18,7 +18,7 @@ Self-check every feature:
 - **Never write the client company's name, or the other brand name the brief forbids,** anywhere: code, commits, README, URLs (not even in this rule). The app name is **Nourish AI**.
 - **Light theme only** (no dark default). No neobrutalism.
 - **No login.** Profiles are picked or created on the device. Data must persist across restarts.
-- **Expo Go compatible**: no libraries that need a dev build. Don't run native or EAS builds unless asked.
+- **From 1.1.0: Android dev builds (Expo Go dropped), Android + web only.** Native modules go behind `.native.ts` / `.web.ts` so the web build keeps working. Build with `scripts/wsl-build.sh` (see `docs/plan-1.1.md`); don't run EAS cloud builds unless asked.
 - **Every feature must work end to end.** Handle loading, empty, error, offline and invalid input.
 - **No vibe-coded mess**: small files, clear layers, comments explain *why*, not *what*.
 - **Never commit secrets.** `server/.env` is git-ignored.
@@ -55,7 +55,8 @@ Before saying a task is done, run **lint + typecheck** in each app you touched, 
 - **Auth (JWT, no passwords):** `POST /auth/signup {name}`, `POST /auth/session {profileId}` → `{ profile, token }` (HS256, `sub = profileId`, `JWT_EXPIRES_IN` 30d). `requireAuth` checks the Bearer token + that the profile exists, sets **`req.profileId`** (read via `authedProfileId(req)`; never from the body). Public: `/api/auth/*`, `GET /api/profiles`. Everything personal is **`/api/me/*`**, no profile ids in URLs.
 - **The numbers rule:** calories, macros, BMI (WHO 18.5/25/30, classes I–III), weeks to goal, kcal burned, challenge amounts are **computed in code**. AI writes text, picks items/portions, classifies, and proposes; it never decides a stored number. Meal kcal = 4·P + 4·C + 9·F of rounded macros; burn = MET × kg × hours.
 - **AI layer** (`services/ai/`): `LlmProvider` (`GeminiProvider`, `GroqProvider`; flags `supportsImages`, `fast`). `generateStructured(zodSchema, {system,user,images?}, check?, {fast?})` → zod → JSON Schema, strips fences, validates, falls through providers on timeout (15 s)/error/invalid shape/`check` failure; returns `{data, provider, model}`. Requests with images skip non-vision providers. `fast: true` tries fast providers (Groq) first (chat, typed foods). `transcription.service.ts`: Whisper first, Gemini audio fallback; filters Whisper's silence phrases ("you", "thank you"…) → `''`.
-- **Proof photos:** every progress log (challenge, activity, sleep, agent logs) needs a photo the vision model accepts (`challenges/proof.service.ts`, confidence ≥ 0.5). Rejection is a 200 with `verified:false` + a note, not an error.
+- **No photo proof (1.1):** challenge, activity, sleep and agent logs count in one tap (nobody competes, so nobody cheats). Only food challenges need a photo, because the plate is saved as a meal. `proof.service.ts` was removed.
+- **Push nudges (1.1):** `PUT /me/device {timezone (IANA), pushToken?}` on every app open. Worker process (`npm run worker`, compose service `worker`) runs a BullMQ repeat job every 10 min → one `nudge.evaluate` per user → `nudge.rules.ts` (pure: user's local clock via luxon, quiet 22–07, max 3/day, once per key per day, skip if active < 30 min, never "you're over") → Redis Lua claim `nudge:day:{profile}:{date}` → Expo push (`data.url` deep link) → `notifications_sent` written in 2 s batches. Queue tech is behind `QueuePort` (`config/queue.ts` picks the driver).
 - **File storage:** Neon S3, private bucket `nourish-ai` (`storage.service.ts`). DB stores **keys** only (`profiles.avatar_key`, `meals.photo_key`); responses carry a 1-h **signed URL** + the key; the app caches by key (`expo-image` `cacheKey`). Uploads checked by magic bytes (`validators/image.validator.ts`, `audio.validator.ts`). Replace/delete removes the old object.
 - **Soft delete:** `profiles.deleted_at`; every profile read filters it (`active`). Old tokens → 401. Unique-name index is partial, so the name frees up.
 - **Dates:** the app sends its local `date` (YYYY-MM-DD) and `tz` (minutes east of UTC) — "today", streaks and nudges follow the user's calendar, not the server's.
@@ -82,7 +83,6 @@ Source: **ui-ux-pro-max** `--design-system` (query: "health nutrition assistant 
 - Patterns: big tappable cards, one question per screen, sticky bottom CTA, haptics on selection/success, press scale 0.97, rounded-2xl/3xl surfaces, minimal text (1–2 word labels on dashboard cards), section headers = small uppercase muted label with `mt-8 mb-3`, collapsible lists ("Your meals · 3 ⌄").
 - Bottom sheets instead of centred modals: own `BottomSheet` + `DraggableSheet` (no `@gorhom/bottom-sheet`: it uses the old Gesture Handler builder API).
 - Lottie: `assets/lottie/` — `heartbeat.json`, `confetti.json`, `nourish-yoga.json` (assistant face; palette-recoloured copy of the user's `Yoga Se Hi hoga.json`, which is kept untouched).
-- Known gap: `components/calorie-ring.tsx` (plan reveal) counts up on a JS timer and ignores reduced motion. Fix with `useReducedMotion()`.
 
 ## 8. Images (delegation)
 Images aren't generated in code. Each spot uses `<ImageSlot description="…" />`, which shows the spec until the art exists.
@@ -190,8 +190,28 @@ Rule: before building a feature, open the relevant skill and note which guidance
 - **Limits:** 30 user msgs/hour (429). `FREE_MESSAGES = 5` counted, enforcement comes with the paywall.
 - **UI:** dashboard waits until `today` settles, then 1.5 s → `AgentIntroSheet` (Lottie 260, "Still tapping buttons?", Let's talk / Not now → `PUT /me/preferences`); `AskNourishTag` (price tag on the right edge, Lottie badge, periodic damped swing); chat with bubbles, typing dots, `AskInput` (chips / stepper), `ActionCard` (kind body, photo step, confirm/cancel, status), composer with `MicButton`. Profile switch is disabled + greyed while saving and only moves on success.
 
+## 11b. 1.1 additions (see docs/plan-1.1.md for the full status)
+| Method & path | Does |
+|---|---|
+| `PUT /me/device` `{timezone, pushToken?}` | IANA zone + push token, on every app open |
+| `POST /me/challenges/propose` `{date, text?, image? (jpeg/png/webp/pdf)}` · `POST /me/challenges` `{date, items}` | "What do you want to achieve?" → proposals → create |
+| `PATCH /me/challenges/:id/expiry` · `POST /me/challenges/:id/finish` · `PUT …/reminder` `{remindAt}` · `PUT …/place` `{place}` · `PUT …/sync` `{date, amount}` | Keep going / done / daily reminder / pinned place / Health Connect day total (sets, never adds) |
+| `GET /me/week?date=&tz=` | Weekly check-in (`services/week/week.rules.ts`, pure) |
+| `POST /me/meals/note` `{note, items}` | Meal note → per-item scales, label kcal, foods to add (AI reads intent, app applies maths) |
+| `POST /me/agent/messages` `{…, report?}` | Report → `create_challenges` card |
+| `POST /me/sessions` `{kind walk|timer, challengeId?, date, data}` · `GET /me/sessions/active` · `GET/PATCH /me/sessions/:id` · `POST /me/sessions/:id/finish` `{date, amount?, data}` · `…/cancel` | Walks/timers that survive the app closing (table `sessions`, `data` jsonb). Finish claims the row, logs the challenge with `sessionId` on the activity (trophy link). `today` returns `session` per challenge → card shows Resume |
+| `POST /me/speak` `{text}` | Voice mode reply as WAV (Gemini TTS `GEMINI_TTS_MODEL`/`GEMINI_TTS_VOICE`, cached; 503 → app uses phone voice) |
+- Reminders live in one sheet (`components/challenges/reminders-sheet.tsx`; bell on the dashboard, Profile, the assistant via `ask.kind="reminders"`; `/reminders` redirects to `/dashboard?open=reminders`): water sips, checkboxes + select all → one time / off (`PUT /me/reminders`), or say it → `POST /me/reminders/plan` (AI picks by list index, app confirms). Voice mode and the meal note row were removed from the app (their endpoints remain).
+- The dashboard + sheet (`GoalSheet`) holds the plan suggestions (never ones like a running challenge) and "Your challenges".
+- **Walk while closed:** `lib/walk-task.ts` = Android foreground service (expo-location task) parking GPS fixes in AsyncStorage; `use-walk-tracker` stores the walk (`walk:active`) and fills gaps on return (background fixes → Health Connect steps → elapsed time, capped 3 h, shown on the card). Builds without `FOREGROUND_SERVICE_LOCATION` fall back to in-app GPS. Timer: start time on the server + a local "done" notification. Trophy: `app/trophy/[id].tsx`, from the activity list. Share = view-shot base64 → app cache → expo-sharing.
+- **Auto check-in:** `lib/place-task.ts` geofences (opt-in switch on the place screen, needs "Allow all the time"); synced from the dashboard; one check-in a day + a notification.
+- **PA priorities (`services/priorities/`):** every "+" ask, report or photo, and every concern stated in chat (turn field `concern`), writes a `user_signals` row (`focus`, abnormal `findings` with an `area`: iron, vitamin_d, b12, sugar, cholesterol, triglycerides, thyroid). `prioritiesFrom` (pure) keeps the last 3 focuses (30 days) and the latest finding per area (120 days). They feed the briefing (`priorityTip`, rule 5½: diet/allergy-safe food or habit for a low/high marker at the right hour, silent once today's meals cover it), the AI "why" line (`caresAbout`), push nudges (`priority` moment, 12–21 h) and the assistant (`data.priorities`). Tests: `tests/priorities.test.ts`; live: `tests/priorities-api.smoke.ts`.
+- Formats are read in the app from tracking (`utils/challenge-format.ts`): water, timer, walk (`app/walk.tsx`), place (`app/place.tsx`), sleep, tally, amount, check. Food challenges stay on the meal camera.
+- Nudge rules are pure in `services/notifications/nudge.rules.ts` (`pickReminder`, `pickWeekly`, `pickNudge`, `pickWaterNudge`), tested in `tests/nudge.test.ts`.
+- `db/index.ts` keeps connections alive and retries a plain query once after ECONNRESET (Neon drops idle sockets).
+
 ## 12. Gotchas (learned the hard way)
-- **Windows/Git Bash:** heredocs with apostrophes and backslashes break; write scripts/files with the editor tool, not `cat <<EOF` with quotes. PowerShell may deny some calls; Bash works.
+- **Windows/Git Bash:** heredocs with apostrophes and backslashes break; write scripts/files with the editor tool, not `cat <<EOF` with quotes. PowerShell may deny some calls; Bash works. Stop a stray dev server with `taskkill //PID <pid> //F` (find it with `netstat -ano | grep :<port>`).
 - **Metro stale bundle** ("Unable to resolve", missing export): restart with `npx expo start --clear`. After adding native-backed packages (expo-audio…) restart Metro.
 - **Typed routes:** a folder without `_layout` names its index `/folder/index`; use a sibling file (`app/exercises.tsx` + `app/exercises/[id].tsx`) for a clean `/exercises`.
 - **Gemini 503 "high demand"** happens; the fallback chain handles it. Groq strict schema + vision is unreliable → Groq vision uses JSON mode with the schema in the prompt.
