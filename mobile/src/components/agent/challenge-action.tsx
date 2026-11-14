@@ -41,9 +41,7 @@ export function ChallengeAction({ card, date, amount, onAmount, editable }: Prop
         <AmountPicker challenge={challenge} value={amount} onChange={onAmount} />
       ) : (
         <Text className="text-sm">
-          {card.check
-            ? 'Mark as done after photo verification'
-            : `Add ${fmt(amount)} ${card.unit ?? ''}`.trim()}
+          {card.check ? 'Marks it done for today' : `Add ${fmt(amount)} ${card.unit ?? ''}`.trim()}
         </Text>
       )}
       {editable && challenge && (

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { request } from '@/lib/api-client';
 import { AI_TIMEOUT_MS } from '@/lib/api-config';
 import type { Photo } from '@/lib/photo';
+import type { Report } from '@/lib/report';
 import type { AgentMessage, AgentThread, AgentUsage, ConfirmResult } from '@/types/agent';
 import { exerciseKeys } from './exercises';
 import { todayKey } from './today';
@@ -31,7 +32,9 @@ function useSetMessages(date: string) {
 export function useSendAgentMessage(date: string) {
   const setMessages = useSetMessages(date);
   return useMutation({
-    mutationFn: (input: string | { text: string; photo: Photo }) =>
+    mutationFn: (
+      input: string | { text: string; photo: Photo } | { text: string; report: Report },
+    ) =>
       request<{ messages: AgentMessage[]; usage: AgentUsage }>('/me/agent/messages', {
         method: 'POST',
         body: {
@@ -39,7 +42,12 @@ export function useSendAgentMessage(date: string) {
           tz: tz(),
           ...(typeof input === 'string'
             ? { text: input }
-            : { text: input.text, image: input.photo }),
+            : 'report' in input
+              ? {
+                  text: input.text,
+                  report: { mimeType: input.report.mimeType, base64: input.report.base64 },
+                }
+              : { text: input.text, image: input.photo }),
         },
         timeoutMs: AI_TIMEOUT_MS,
       }),

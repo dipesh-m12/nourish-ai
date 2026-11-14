@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { ArrowUp, ChevronLeft, ListChecks } from 'lucide-react-native';
+import { ArrowUp, Bell, ChevronLeft, FileText, ListChecks } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, KeyboardAvoidingView, Pressable, TextInput, View } from 'react-native';
 import Animated, { FadeInDown, FadeInUp, useReducedMotion } from 'react-native-reanimated';
@@ -28,9 +28,11 @@ import { colors } from '@/constants/colors';
 import { ApiError } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
 import type { Photo } from '@/lib/photo';
+import { pickReport, ReportTooBigError } from '@/lib/report';
 import { useToast } from '@/store/toast';
 import type { AgentMessage } from '@/types/agent';
 import { localDate } from '@/utils/date';
+import { RemindersSheet } from '@/components/challenges/reminders-sheet';
 
 /**
  * Chat with Nourish: say or type what you did, answer its quick questions with a tap, confirm
@@ -52,6 +54,7 @@ export default function AssistantScreen() {
   const [text, setText] = useState('');
   const [hint, setHint] = useState<string | null>(null);
   const [showChallenges, setShowChallenges] = useState<boolean | null>(null);
+  const [remindersOpen, setRemindersOpen] = useState(false);
   const [proofPhotos, setProofPhotos] = useState<Record<string, Photo>>({});
   const list = useRef<FlatList<AgentMessage>>(null);
 
@@ -102,6 +105,22 @@ export default function AssistantScreen() {
     sendMessage(prompt, { onError: sendFailed });
   }, [prompt, thread.isSuccess, showIntro, sendMessage, sendFailed]);
 
+  /** A health report (PDF or image): the assistant reads it and proposes challenges on a card. */
+  const attachReport = async () => {
+    if (send.isPending) return;
+    setHint(null);
+    try {
+      const report = await pickReport();
+      if (!report) return;
+      send.mutate(
+        { text: text.trim() || 'Here is my health report.', report },
+        { onSuccess: () => setText(''), onError: sendFailed },
+      );
+    } catch (err) {
+      setHint(err instanceof ReportTooBigError ? err.message : 'Couldn’t open that file.');
+    }
+  };
+
   const scrollToEnd = () =>
     requestAnimationFrame(() => list.current?.scrollToEnd({ animated: true }));
 
@@ -149,7 +168,7 @@ export default function AssistantScreen() {
         <View className="flex-1">
           <Heading className="text-xl leading-tight">Nourish</Heading>
           <Text className="text-xs text-muted">
-            {send.isPending ? 'Thinking…' : 'Logs it for you, nudges you on time'}
+            {send.isPending ? 'Thinking…' : 'Your assistant'}
           </Text>
         </View>
         <Pressable
@@ -207,9 +226,28 @@ export default function AssistantScreen() {
             ListFooterComponent={
               <View className="gap-3 pt-3">
                 {challengeToolsVisible && <ChallengeTools date={date} />}
-                {liveAsk && liveAsk.kind !== 'challenges' && !showChallenges && (
-                  <AskInput key={last!.id} ask={liveAsk} onAnswer={submit} onPhoto={submitPhoto} />
+                {liveAsk?.kind === 'reminders' && (
+                  <PressableScale
+                    onPress={() => setRemindersOpen(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Open reminders"
+                    className="h-12 flex-row items-center justify-center gap-2 self-start rounded-full bg-ink px-5"
+                  >
+                    <Bell size={18} color="#fff" />
+                    <Text className="font-sans-semibold text-white">Reminders</Text>
+                  </PressableScale>
                 )}
+                {liveAsk &&
+                  liveAsk.kind !== 'challenges' &&
+                  liveAsk.kind !== 'reminders' &&
+                  !showChallenges && (
+                    <AskInput
+                      key={last!.id}
+                      ask={liveAsk}
+                      onAnswer={submit}
+                      onPhoto={submitPhoto}
+                    />
+                  )}
                 {send.isPending && (
                   <>
                     <UserBubble
@@ -247,6 +285,15 @@ export default function AssistantScreen() {
             </Pressable>
           )}
           <View className="flex-row items-center gap-2">
+            <PressableScale
+              onPress={() => void attachReport()}
+              disabled={send.isPending}
+              accessibilityRole="button"
+              accessibilityLabel="Add a health report, PDF or image"
+              className="h-11 w-11 items-center justify-center rounded-full bg-card"
+            >
+              <FileText size={20} color={colors.ink} />
+            </PressableScale>
             {/* Own the input's padding so native multiline insets don't set the row height. */}
             <TextInput
               value={text}
@@ -281,6 +328,7 @@ export default function AssistantScreen() {
           </View>
         </View>
       </KeyboardAvoidingView>
+      <RemindersSheet visible={remindersOpen} date={date} onClose={() => setRemindersOpen(false)} />
     </SafeAreaView>
   );
 }

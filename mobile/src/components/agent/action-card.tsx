@@ -20,6 +20,7 @@ import type {
   AgentAction,
   ChallengeCard,
   ChangeCard,
+  CreateChallengesCard,
   MealCard,
   RemoveCard,
   SleepCard,
@@ -35,6 +36,7 @@ const KIND_LABEL: Record<AgentAction['kind'], string> = {
   log_challenge: 'Challenge',
   log_sleep: 'Sleep',
   change_challenges: 'Your challenges',
+  create_challenges: 'New challenges',
   remove_last: 'Undo',
 };
 
@@ -174,9 +176,7 @@ export function ActionCard({ action, date, initialPhoto, onConfirm, onCancel }: 
                 className="h-12 w-12 rounded-lg"
                 contentFit="cover"
               />
-              <Text className="flex-1 text-sm text-muted">
-                Photo added. Our AI checks it when you confirm.
-              </Text>
+              <Text className="flex-1 text-sm text-muted">Photo added.</Text>
               <Pressable
                 onPress={() => setPhoto(null)}
                 disabled={working !== null}
@@ -388,6 +388,22 @@ function CardBody({ action }: { action: AgentAction }) {
               <Text className="font-sans-semibold">− </Text>
               {c.title}
             </Text>
+          ))}
+        </View>
+      );
+    }
+    case 'create_challenges': {
+      const cc = p as CreateChallengesCard;
+      return (
+        <View className="mt-1.5 gap-2">
+          {cc.items.map((c) => (
+            <View key={c.title}>
+              <Text className="text-sm">
+                <Text className="font-sans-semibold text-primary">+ </Text>
+                {c.title} · {c.target}
+              </Text>
+              <Text className="ml-3 text-xs text-muted">{c.why}</Text>
+            </View>
           ))}
         </View>
       );

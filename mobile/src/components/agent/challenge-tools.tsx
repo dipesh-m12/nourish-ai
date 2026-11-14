@@ -1,33 +1,44 @@
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useToday } from '@/api/today';
+import { ChallengeMenu } from '@/components/challenges/challenge-menu';
 import { ChallengeCard } from '@/components/dashboard/challenge-card';
 import { ChallengePickerSheet } from '@/components/dashboard/challenge-picker-sheet';
 import { MealSheet, type MealSheetRequest } from '@/components/dashboard/meal-sheet';
-import { ProofSheet } from '@/components/dashboard/proof-sheet';
+import { LogSheet, useQuickLog } from '@/components/dashboard/log-sheet';
 import { Button } from '@/components/ui/button';
 import { SkeletonBlock } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
 import type { TodayChallenge } from '@/types/today';
+import { formatFor } from '@/utils/challenge-format';
 
 /** Reads the same accepted challenges and stored widgets as the dashboard. */
 export function ChallengeTools({ date }: { date: string }) {
   const today = useToday(date);
-  const [proofFor, setProofFor] = useState<TodayChallenge | null>(null);
+  const [logFor, setLogFor] = useState<TodayChallenge | null>(null);
+  const quickLog = useQuickLog(date);
   const [mealFor, setMealFor] = useState<MealSheetRequest | null>(null);
   const [editing, setEditing] = useState(false);
+  const [menuFor, setMenuFor] = useState<string | null>(null);
   const challenges = today.data?.challenges ?? [];
   const rows: TodayChallenge[][] = [];
   for (let i = 0; i < challenges.length; i += 2) rows.push(challenges.slice(i, i + 2));
 
   const log = (challenge: TodayChallenge) => {
-    if (challenge.logsVia === 'meal') {
+    if (challenge.session?.kind === 'walk') {
+      router.push({ pathname: '/walk', params: { id: challenge.id } });
+    } else if (formatFor(challenge) === 'place') {
+      router.push({ pathname: '/place', params: { id: challenge.id } });
+    } else if (challenge.logsVia === 'meal') {
       setMealFor({
         challengeId: challenge.id,
         challengeLabel: challenge.tracking.label ?? challenge.title,
       });
+    } else if (challenge.tracking.kind === 'check') {
+      quickLog(challenge);
     } else {
-      setProofFor(challenge);
+      setLogFor(challenge);
     }
   };
 
@@ -69,17 +80,27 @@ export function ChallengeTools({ date }: { date: string }) {
         rows.map((row) => (
           <View key={row.map((c) => c.id).join()} className="flex-row gap-3">
             {row.map((challenge) => (
-              <ChallengeCard key={challenge.id} challenge={challenge} onLog={log} />
+              <ChallengeCard
+                key={challenge.id}
+                challenge={challenge}
+                onLog={log}
+                onEdit={(c) => setMenuFor(c.id)}
+              />
             ))}
             {row.length === 1 && <View className="flex-1" />}
           </View>
         ))
       )}
-      <ProofSheet
-        key={proofFor?.id ?? 'no-proof'}
-        challenge={proofFor}
+      <LogSheet
+        key={logFor?.id ?? 'none'}
+        challenge={logFor}
         date={date}
-        onClose={() => setProofFor(null)}
+        onClose={() => setLogFor(null)}
+      />
+      <ChallengeMenu
+        challenge={challenges.find((c) => c.id === menuFor) ?? null}
+        date={date}
+        onClose={() => setMenuFor(null)}
       />
       <MealSheet request={mealFor} date={date} onClose={() => setMealFor(null)} />
       <ChallengePickerSheet

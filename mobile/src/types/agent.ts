@@ -3,7 +3,7 @@ import type { MealCredit, MealItem } from './meal';
 import type { TodayChallenge } from './today';
 
 export interface AgentAsk {
-  kind: 'choice' | 'number' | 'photo' | 'challenges';
+  kind: 'choice' | 'number' | 'photo' | 'challenges' | 'reminders';
   options?: string[];
   unit?: string;
   min?: number;
@@ -13,7 +13,18 @@ export interface AgentAsk {
 }
 
 export type AgentActionKind =
-  'log_meal' | 'log_activity' | 'log_challenge' | 'log_sleep' | 'change_challenges' | 'remove_last';
+  | 'log_meal'
+  | 'log_activity'
+  | 'log_challenge'
+  | 'log_sleep'
+  | 'change_challenges'
+  | 'create_challenges'
+  | 'remove_last';
+
+/** Challenges proposed from a report, saved on confirm. */
+export interface CreateChallengesCard {
+  items: { title: string; target: string; why: string; endsOn: string | null }[];
+}
 
 export interface AgentAction {
   id: string;
