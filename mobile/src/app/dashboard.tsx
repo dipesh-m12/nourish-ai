@@ -1,6 +1,6 @@
 import Constants from 'expo-constants';
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
-import { Bell, Mic, Plus } from 'lucide-react-native';
+import { Bell, Plus } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import Animated, { FadeInDown, LinearTransition } from 'react-native-reanimated';
@@ -23,6 +23,7 @@ import { ChallengePickerSheet } from '@/components/dashboard/challenge-picker-sh
 import { LogSheet, useQuickLog } from '@/components/dashboard/log-sheet';
 import { EndedCards } from '@/components/challenges/ended-card';
 import { HealthCard } from '@/components/dashboard/health-card';
+import { StarterPicks } from '@/components/dashboard/starter-picks';
 import { enablePush } from '@/hooks/use-device-registration';
 import { syncGeofences } from '@/lib/place-task';
 import { useHealthSync } from '@/hooks/use-health-sync';
@@ -332,9 +333,7 @@ export default function DashboardScreen() {
         )}
 
         {today.isSuccess && challenges.length === 0 && (
-          <Animated.View entering={FadeInDown.duration(400)}>
-            <EmptyChallenges onPick={() => setGoalOpen(true)} />
-          </Animated.View>
+          <StarterPicks onOther={() => setGoalOpen(true)} />
         )}
 
         {health.hasAuto && health.status === 'needs_permission' && (
@@ -435,24 +434,5 @@ export default function DashboardScreen() {
         onLater={() => answerIntro(false)}
       />
     </SafeAreaView>
-  );
-}
-
-/** Shown when no challenges are running: the PA asks, the user answers in their own words. */
-function EmptyChallenges({ onPick }: { onPick: () => void }) {
-  return (
-    <PressableScale
-      onPress={onPick}
-      accessibilityRole="button"
-      accessibilityLabel="What do you want to achieve?"
-      className="flex-row items-center gap-4 rounded-3xl bg-card p-5"
-    >
-      <View className="h-12 w-12 items-center justify-center rounded-full bg-primary-soft">
-        <Mic size={22} color={colors.primary} />
-      </View>
-      <View className="flex-1">
-        <Text className="font-sans-semibold text-lg">What do you want to achieve?</Text>
-      </View>
-    </PressableScale>
   );
 }
