@@ -1,7 +1,21 @@
 import '../global.css';
 import '@/lib/native-wind-interop';
+// Background tasks must be defined before the OS wakes them (walk tracking, place check-in).
+import '@/lib/walk-task';
+import '@/lib/place-task';
 
-import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold } from '@expo-google-fonts/inter';
+import {
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+} from '@expo-google-fonts/inter';
+import {
+  BarlowCondensed_600SemiBold,
+  BarlowCondensed_700Bold,
+  BarlowCondensed_800ExtraBold,
+  BarlowCondensed_900Black,
+} from '@expo-google-fonts/barlow-condensed';
 import { Lora_600SemiBold, Lora_700Bold } from '@expo-google-fonts/lora';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { useFonts } from 'expo-font';
@@ -12,6 +26,7 @@ import { PostHogErrorBoundary, PostHogProvider } from 'posthog-react-native';
 import { type ReactNode, useCallback, useState } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AnimatedSplash } from '@/components/animated-splash';
+import { DeviceSync } from '@/components/device-sync';
 import { OfflineBanner } from '@/components/offline-banner';
 import { ScreenFrame } from '@/components/screen-frame';
 import { Toast } from '@/components/toast';
@@ -43,6 +58,11 @@ export default function RootLayout() {
     Inter_400Regular,
     Inter_500Medium,
     Inter_600SemiBold,
+    Inter_700Bold,
+    BarlowCondensed_600SemiBold,
+    BarlowCondensed_700Bold,
+    BarlowCondensed_800ExtraBold,
+    BarlowCondensed_900Black,
     Lora_600SemiBold,
     Lora_700Bold,
   });
@@ -77,6 +97,16 @@ export default function RootLayout() {
               <Stack.Screen name="assistant" options={{ animation: 'slide_from_bottom' }} />
               <Stack.Screen name="adopt" options={{ animation: 'slide_from_bottom' }} />
               <Stack.Screen name="club" options={{ animation: 'slide_from_bottom' }} />
+              <Stack.Screen name="whats-new" options={{ animation: 'fade' }} />
+              <Stack.Screen name="week" options={{ animation: 'slide_from_bottom' }} />
+              <Stack.Screen name="place" options={{ animation: 'slide_from_bottom' }} />
+              <Stack.Screen name="reminders" />
+              <Stack.Screen name="trophy/[id]" options={{ animation: 'fade' }} />
+              <Stack.Screen name="workout" options={{ animation: 'fade', gestureEnabled: false }} />
+              <Stack.Screen
+                name="walk"
+                options={{ animation: 'slide_from_bottom', gestureEnabled: false }}
+              />
               <Stack.Screen
                 name="checkout"
                 options={{ animation: 'slide_from_right', gestureEnabled: false }}
@@ -86,6 +116,7 @@ export default function RootLayout() {
             <OfflineBanner />
             <Toast />
             <UpdateRequired />
+            <DeviceSync ready={splashDone} />
             {/* Rendered above the app, which loads underneath while the splash plays. */}
             {!splashDone && <AnimatedSplash onFinish={finishSplash} />}
           </Analytics>
