@@ -19,6 +19,7 @@ import { COMPANION_NAME, companionMood } from '../companion/companion.rules';
 import { profileService } from '../profile.service';
 import { mealService } from '../meals/meal.service';
 import { activeChallenges, endedChallenges } from './active';
+import { dailyStreak } from './streak';
 import { ensureTracking } from './tracking.service';
 
 /** Longest streak we look back for (keeps the query bounded). */
@@ -60,23 +61,6 @@ async function dailyTotalsByChallenge(
 /** Days of history returned per challenge (a 4-week timeline). */
 const HISTORY_DAYS = 28;
 
-/** Consecutive days (ending today, or yesterday if today isn't done yet) that hit the daily target. */
-function dailyStreak(
-  totals: DailyTotals,
-  today: string,
-  target: number,
-  startedOn: string,
-): number {
-  const hit = (d: string) => d >= startedOn && (totals.get(d) ?? 0) >= target;
-  let day = hit(today) ? today : addDays(today, -1);
-  let streak = 0;
-  while (hit(day) && streak < STREAK_LOOKBACK_DAYS) {
-    streak++;
-    day = addDays(day, -1);
-  }
-  return streak;
-}
-
 /**
  * Progress for one challenge. History is a 4-week timeline where each day is either
  * inactive (before the user took the challenge on) or active with its total, so a missed
@@ -111,7 +95,15 @@ function progressView(
     done: value >= tracking.target,
     startedOn,
     history,
-    streak: frequency === 'daily' ? dailyStreak(totals, today, tracking.target, startedOn) : 0,
+    streak:
+      frequency === 'daily'
+        ? dailyStreak(
+            (d) => (totals.get(d) ?? 0) >= tracking.target,
+            today,
+            startedOn,
+            STREAK_LOOKBACK_DAYS,
+          )
+        : 0,
     missed,
   };
 }

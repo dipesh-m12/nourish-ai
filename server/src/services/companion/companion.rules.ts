@@ -1,4 +1,5 @@
 import { addDays } from '../../utils/dates';
+import { REST_EVERY_DAYS } from '../challenges/streak';
 
 /**
  * The companion cat's mood, from the user's challenge history. Pure, so every rule is testable.
@@ -43,6 +44,11 @@ function perfect(daily: DailyHistory[], day: string) {
   return active.length > 0 && active.every((x) => x.h!.value >= x.c.goal);
 }
 
+/** Did any daily challenge run that day? (Days before the first one don't count as misses.) */
+function hadAny(daily: DailyHistory[], day: string) {
+  return daily.some((c) => c.history.find((x) => x.date === day)?.active);
+}
+
 export function companionMood(i: MoodInput): MoodView {
   const missed = (day: string) => day >= i.adoptedOn && !perfect(i.daily, day);
 
@@ -69,9 +75,18 @@ export function companionMood(i: MoodInput): MoodView {
   if (i.acceptedCount === 0) {
     return { mood: 'normal', line: `${COMPANION_NAME} is bored. Take a challenge.` };
   }
-  // 4. Yesterday broke the streak.
+  // 4. Missed yesterday. If it's the week's only miss, streaks hold (a rest day, see
+  //    challenges/streak.ts) and she says so: forgiving once keeps people going.
   if (missed(addDays(i.today, -1))) {
-    return { mood: 'sad', line: `You missed yesterday. ${COMPANION_NAME} cried.` };
+    const week = Array.from({ length: REST_EVERY_DAYS - 1 }, (_, n) => addDays(i.today, -(n + 2)));
+    const restDay =
+      perfect(i.daily, week[0]!) && week.every((d) => perfect(i.daily, d) || !hadAny(i.daily, d));
+    return {
+      mood: 'sad',
+      line: restDay
+        ? `You missed yesterday. ${COMPANION_NAME} kept your streak, just this once.`
+        : `You missed yesterday. ${COMPANION_NAME} cried.`,
+    };
   }
   // 5. Halfway there.
   if (total > 0 && doneToday / total >= 0.5) {
