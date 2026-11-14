@@ -127,6 +127,55 @@
       "when": 1794160197271,
       "tag": "0017_app_version_rules",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1794588562130,
+      "tag": "0018_push_nudges",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1794594052950,
+      "tag": "0019_challenge_expiry",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1794597299241,
+      "tag": "0020_log_source",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1794641773292,
+      "tag": "0021_challenge_reminder",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1794643739850,
+      "tag": "0022_challenge_place",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1794663543704,
+      "tag": "0023_sessions",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1794686340790,
+      "tag": "0024_user_signals",
+      "breakpoints": true
     }
   ]
 }

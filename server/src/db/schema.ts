@@ -41,10 +41,21 @@ export interface CompanionPrefs {
   leftAt?: string | null;
 }
 
+/** A pinned place: where the user wants to show up. */
+export interface ChallengePlace {
+  lat: number;
+  lng: number;
+  radiusM: number;
+}
+
 export interface Preferences {
   companion?: CompanionPrefs;
   /** Saw the assistant's how-it-works slides (shown once, on first opening the chat). */
   assistantIntroSeen?: boolean;
+  /** Opt-in reminders by kind. Missing = not asked yet (the app asks once, in context). */
+  reminders?: { water?: boolean };
+  /** Last app version whose "What's new" page was shown (shown once per version). */
+  whatsNewSeen?: string;
 }
 
 // A profile is the user's identity (no login). Body details are filled during onboarding.
@@ -68,6 +79,13 @@ export const profiles = pgTable(
     dietType: dietEnum('diet_type'),
     allergies: text('allergies').array().notNull().default([]),
     onboardedAt: timestamp('onboarded_at', { withTimezone: true }),
+    /** IANA zone from the device (e.g. "Asia/Kolkata"), refreshed on every app open. Push
+     *  timing uses it; a bare offset would drift across daylight saving and travel. */
+    timezone: text('timezone'),
+    /** Expo push token of the device this profile was last opened on (null = no pushes). */
+    pushToken: text('push_token'),
+    /** Last time the app was opened: nudges skip users who are already in the app. */
+    lastActiveAt: timestamp('last_active_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     /** Soft delete: set when the user deletes their account. Rows are kept, never shown. */
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
@@ -168,6 +186,14 @@ export const challenges = pgTable(
     acceptedAt: timestamp('accepted_at', { withTimezone: true }),
     /** How progress is measured and shown. Decided by AI on first dashboard load, then fixed. */
     tracking: jsonb('tracking').$type<ChallengeTracking>(),
+    /** Last local day it runs (inclusive). Null = ongoing. "Just today" = today's date. */
+    endsOn: date('ends_on', { mode: 'string' }),
+    /** Daily reminder at this local time ("07:30"), set by the user. Null = none. */
+    remindAt: text('remind_at'),
+    /** A saved spot for "get there" challenges (gym, park). Check-in unlocks within the radius. */
+    place: jsonb('place').$type<ChallengePlace>(),
+    /** 'plan' = suggested at onboarding (replaced when the plan is rebuilt); 'user' = asked for. */
+    source: text('source').notNull().default('plan'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('challenges_profile_idx').on(t.profileId)],
@@ -232,6 +258,8 @@ export const challengeLogs = pgTable(
     proofNote: text('proof_note'),
     /** Set when this credit came from a logged meal; deleting the meal removes it too. */
     mealId: uuid('meal_id').references(() => meals.id, { onDelete: 'cascade' }),
+    /** Where it came from: manual | health_connect | timer | agent. A sync replaces its own rows. */
+    source: text('source').notNull().default('manual'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('challenge_logs_challenge_date_idx').on(t.challengeId, t.localDate)],
@@ -278,6 +306,10 @@ export const activities = pgTable(
     challengeLogId: uuid('challenge_log_id').references(() => challengeLogs.id, {
       onDelete: 'cascade',
     }),
+    /** manual | health_connect | timer | agent (mirrors the challenge log it came from). */
+    source: text('source').notNull().default('manual'),
+    /** The tracked walk or timer this came from: its trophy card opens from the activity list. */
+    sessionId: uuid('session_id'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('activities_profile_date_idx').on(t.profileId, t.localDate)],
@@ -322,7 +354,7 @@ export const meals = pgTable(
 /** An inline input the assistant asks for: chips, or a number with a unit. */
 export interface AgentAsk {
   /** photo = the app opens camera/gallery and sends the picture back. */
-  kind: 'choice' | 'number' | 'photo' | 'challenges';
+  kind: 'choice' | 'number' | 'photo' | 'challenges' | 'reminders';
   options?: string[];
   unit?: string;
   min?: number;
@@ -496,3 +528,112 @@ export const appVersionRules = pgTable('app_version_rules', {
   updateUrl: text('update_url'),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * Every push nudge sent. One row per (profile, key, local day): `key` names the moment
+ * ("meal:lunch", "streak_risk"), so the same nudge can never go out twice in a user's day.
+ * Written in batches by the worker (services/notifications/sent-log.buffer.ts).
+ */
+export const notificationsSent = pgTable(
+  'notifications_sent',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    profileId: uuid('profile_id')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'cascade' }),
+    key: text('key').notNull(),
+    localDate: date('local_date').notNull(),
+    title: text('title').notNull(),
+    body: text('body').notNull(),
+    url: text('url'),
+    sentAt: timestamp('sent_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('notifications_sent_once').on(t.profileId, t.key, t.localDate)],
+);
+
+/**
+ * A timed thing in progress or done: a tracked walk, a breathing/stretch timer. The start time
+ * lives here, so closing the app (or the phone sleeping) never loses it: on return the app
+ * works out the time that passed. `data` holds what each kind needs (see SessionData).
+ * Finished walks are kept: they are the trophy cards that can be reopened and shared.
+ */
+export type SessionKind = 'walk' | 'timer';
+export type SessionStatus = 'active' | 'finished' | 'cancelled';
+export interface SessionData {
+  /** timer: the length picked. */
+  minutes?: number;
+  /** A workout started from the Move cards: what kind (walk, run, yoga...). */
+  activity?: string;
+  /** A timed exercise from the library: logged with its own kind, name and MET. */
+  exerciseId?: string;
+  /** walk: moving time, distance, steps, stops and the route ([lng, lat], downsampled). */
+  movingMs?: number;
+  metres?: number;
+  steps?: number | null;
+  pauses?: number;
+  path?: [number, number][];
+  /** Time counted while the app was closed (shown on the card, so it's honest). */
+  awayMs?: number;
+  /** Set on finish from the server's burn maths. */
+  calories?: number | null;
+  title?: string;
+}
+
+export const sessions = pgTable(
+  'sessions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    profileId: uuid('profile_id')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'cascade' }),
+    challengeId: uuid('challenge_id').references(() => challenges.id, { onDelete: 'set null' }),
+    kind: text('kind').$type<SessionKind>().notNull(),
+    status: text('status').$type<SessionStatus>().notNull().default('active'),
+    localDate: date('local_date').notNull(),
+    startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
+    endedAt: timestamp('ended_at', { withTimezone: true }),
+    data: jsonb('data').$type<SessionData>().notNull().default({}),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('sessions_profile_status_idx').on(t.profileId, t.status)],
+);
+
+/**
+ * What the user has told Nourish they care about, so the PA (the briefing card, nudges, chat)
+ * can follow their priorities instead of guessing. One row per "+" ask, report or photo.
+ * `focus` is the problem in a few words ("low iron", "knee pain on stairs"); `findings` are the
+ * abnormal markers the AI read off a report (normal ones aren't stored).
+ */
+export type FindingArea =
+  | 'iron'
+  | 'vitamin_d'
+  | 'b12'
+  | 'sugar'
+  | 'cholesterol'
+  | 'triglycerides'
+  | 'thyroid'
+  | 'other';
+export interface ReportFinding {
+  marker: string;
+  value: string;
+  unit: string;
+  flag: 'low' | 'high';
+  area: FindingArea;
+}
+
+export const userSignals = pgTable(
+  'user_signals',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    profileId: uuid('profile_id')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'cascade' }),
+    kind: text('kind').$type<'ask' | 'report' | 'photo'>().notNull(),
+    /** Their own words, if they typed or said something. */
+    said: text('said'),
+    focus: text('focus'),
+    findings: jsonb('findings').$type<ReportFinding[]>().notNull().default([]),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('user_signals_profile_created_idx').on(t.profileId, t.createdAt)],
+);

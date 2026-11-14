@@ -1,0 +1,1 @@
+ALTER TABLE "challenges" ADD COLUMN "remind_at" text;
