@@ -28,3 +28,23 @@ export function estimateWeeks(currentKg: number, targetKg: number | null): numbe
   const pace = targetKg < currentKg ? KG_PER_WEEK.lose : KG_PER_WEEK.gain;
   return Math.max(1, Math.round(Math.abs(currentKg - targetKg) / pace));
 }
+
+const WATER_ACTIVITY_BONUS_L = {
+  sedentary: 0,
+  light: 0.25,
+  moderate: 0.5,
+  active: 0.75,
+  very_active: 1,
+} as const;
+
+/**
+ * Daily water in litres: ~35 ml per kg of body weight, plus more for active days, kept between
+ * 1.5 and 4 L and rounded to a quarter litre (one glass). Food covers the rest of the day's fluid.
+ */
+export function waterTargetL(
+  weightKg: number,
+  activity: keyof typeof WATER_ACTIVITY_BONUS_L | null,
+): number {
+  const litres = weightKg * 0.035 + (activity ? WATER_ACTIVITY_BONUS_L[activity] : 0);
+  return Math.min(4, Math.max(1.5, Math.round(litres * 4) / 4));
+}

@@ -15,6 +15,7 @@ import { ensureTracking, shortLabel } from '../challenges/tracking.service';
 import { storageService } from '../storage.service';
 import type { AnalyzeMealInput, SaveMealInput } from '../../validators/meal.validator';
 import { conflictMessage, dietConflicts } from '../diet-rules';
+import { activeChallenges } from '../challenges/active';
 import { canCreditFromMeal } from './food-challenge';
 import { analyzeMeal, estimateTypedItem, type MealSource } from './meal-analysis.service';
 
@@ -42,12 +43,12 @@ function totalsOf(items: MealItem[]) {
   };
 }
 
-/** Accepted challenges a meal may credit, with tracking specs. */
-async function mealChallenges(profileId: string) {
+/** Challenges running on `date` that a meal may credit, with tracking specs. */
+async function mealChallenges(profileId: string, date: string) {
   const rows = await db
     .select()
     .from(challenges)
-    .where(and(eq(challenges.profileId, profileId), eq(challenges.accepted, true)))
+    .where(activeChallenges(profileId, date))
     .orderBy(asc(challenges.createdAt), asc(challenges.id));
   return ensureTracking(rows.filter(canCreditFromMeal));
 }
@@ -81,7 +82,8 @@ function creditAmount(c: Tracked, raw: number) {
  * 1. what the AI matched (only the user's own eligible challenges, capped),
  * 2. a rule for protein challenges: protein is a number we compute, so whether a meal counts
  *    must not depend on how the AI reads a title like "Add protein to breakfast",
- * 3. the challenge the user started from (tapped its "+"): they said this meal is for it.
+ * 3. the challenge the user snapped this for, but only when the AI judged the meal fits it
+ *    (it sees that challenge's title, target and unit; a plain plate doesn't pass "protein bowl").
  */
 function cleanCredits(
   credits: { challengeId: string; amount: number }[],
@@ -157,7 +159,7 @@ async function analyzeSource(
   const [profile, goal, eligible, eatenRow] = await Promise.all([
     db.query.profiles.findFirst({ where: eq(profiles.id, profileId) }),
     db.query.goals.findFirst({ where: eq(goals.profileId, profileId) }),
-    mealChallenges(profileId),
+    mealChallenges(profileId, date),
     db
       .select({
         calories: sql<number>`coalesce(sum(${meals.calories}), 0)::int`,
@@ -180,7 +182,7 @@ async function analyzeSource(
         proteinG: goal.proteinG - eaten.proteinG,
       },
       challenges: eligible,
-      startedFrom: eligible.find((c) => c.id === challengeId)?.title,
+      startedFrom: eligible.find((c) => c.id === challengeId)?.id,
     });
   } catch {
     throw new AppError(
@@ -194,7 +196,14 @@ async function analyzeSource(
   if (!analysis.isFood || !analysis.items.length) {
     return { isFood: false as const, comment: analysis.comment };
   }
+  const started = challengeId ? eligible.find((c) => c.id === challengeId) : undefined;
   const items = toItems(analysis.items);
+  // The AI judged it against that challenge; a protein challenge also passes on computed
+  // protein (the same rule that credits it), so the verdict and the credit never disagree.
+  const fits =
+    Boolean(started) &&
+    (!analysis.startedFitNote.trim() ||
+      (isProteinChallenge(started!) && totalsOf(items).proteinG >= MIN_PROTEIN_G));
   const conflicts = dietConflicts(
     items.map((i) => i.name),
     profile?.dietType ?? null,
@@ -220,7 +229,20 @@ async function analyzeSource(
     totals: totalsOf(items),
     comment: analysis.comment,
     // What the meal earns without its conflicting items; save() re-checks the final list.
-    credits: cleanCredits(analysis.credits, eligible, totalsOf(items), challengeId),
+    credits: cleanCredits(
+      analysis.credits,
+      eligible,
+      totalsOf(items),
+      fits ? challengeId : undefined,
+    ),
+    /** Snapped for a challenge: whether it counts, and if not, why (a few words). */
+    startedFit: started
+      ? {
+          label: started.tracking.label ?? shortLabel(started.title),
+          fits,
+          note: fits ? null : analysis.startedFitNote,
+        }
+      : null,
   };
 }
 
@@ -259,7 +281,7 @@ export const mealService = {
     const items = toItems(input.items);
     const [profile, eligible] = await Promise.all([
       db.query.profiles.findFirst({ where: eq(profiles.id, profileId) }),
-      mealChallenges(profileId),
+      mealChallenges(profileId, input.date),
     ]);
     // Re-checked here too: the client can't earn challenge credit for food outside the diet.
     const offDiet = dietConflicts(
@@ -269,7 +291,8 @@ export const mealService = {
     ).length;
     const credits = offDiet
       ? []
-      : cleanCredits(input.credits, eligible, totalsOf(items), input.challengeId);
+      : // No forced credit here: analyze() already decided whether the tapped challenge fits.
+        cleanCredits(input.credits, eligible, totalsOf(items));
 
     let photoKey: string | null = null;
     if (photo) {

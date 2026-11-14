@@ -1,3 +1,4 @@
+import { applyNote } from '../services/meals/meal-note.service';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { authedProfileId } from '../middlewares/auth';
@@ -28,6 +29,15 @@ export const mealController = {
   async estimateItem(req: Request, res: Response) {
     const { text } = req.body as EstimateItemInput;
     res.json(await mealService.estimateItem(authedProfileId(req), text));
+  },
+
+  /** A note about the plate → per-item scales (+ a label kcal, + foods to add). */
+  async note(req: Request, res: Response) {
+    try {
+      res.json(await applyNote(req.body.items, req.body.note));
+    } catch {
+      throw new AppError(503, 'Couldn’t read that. Try the item rows instead.');
+    }
   },
 
   async save(req: Request, res: Response) {

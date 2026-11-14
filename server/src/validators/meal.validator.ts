@@ -41,6 +41,15 @@ export const saveMealSchema = z.object({
 /** "1 bowl curd" → one estimated item, for foods the photo missed. */
 export const estimateItemSchema = z.object({ text: z.string().trim().min(2).max(80) });
 
+/** "Anything to add?": a note about the plate, applied to the items under review. */
+export const mealNoteSchema = z.object({
+  note: z.string().trim().min(2).max(200),
+  items: z
+    .array(z.object({ name: z.string().max(80), portion: z.string().max(80) }))
+    .min(1)
+    .max(20),
+});
+
 export const mealIdParamSchema = z.object({ id: z.uuid() });
 
 export type AnalyzeMealInput = z.infer<typeof analyzeMealSchema>;

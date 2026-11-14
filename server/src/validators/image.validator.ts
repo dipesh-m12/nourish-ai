@@ -31,3 +31,20 @@ export function looksLikeImage(bytes: Buffer, mimeType: string): boolean {
 }
 
 export type ImageUpload = z.infer<typeof imageInputSchema>;
+
+/** A health report: a photo of it, or the PDF itself (~1 MB max, the JSON body limit is 2 MB). */
+export const reportInputSchema = z.object({
+  mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp', 'application/pdf']),
+  base64: z
+    .string()
+    .min(100, 'Report is missing or empty')
+    .max(MAX_BASE64_LENGTH, 'Report is too large (1 MB max)'),
+});
+
+export type ReportUpload = z.infer<typeof reportInputSchema>;
+
+/** Magic bytes for PDFs ("%PDF"), alongside the image checks. */
+export function looksLikeReport(bytes: Buffer, mimeType: string): boolean {
+  if (mimeType === 'application/pdf') return bytes.subarray(0, 4).toString('ascii') === '%PDF';
+  return looksLikeImage(bytes, mimeType);
+}
