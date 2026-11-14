@@ -1,4 +1,6 @@
+import type { ReportFinding } from '../../db/schema';
 import { containsAllergen } from '../diet-rules';
+import { priorityTip } from '../priorities/priorities.rules';
 
 /**
  * The daily briefing's brain: given the user's day so far, pick the ONE thing that matters most
@@ -11,6 +13,7 @@ export type BriefingKind =
   | 'meal_time'
   | 'over'
   | 'near_limit'
+  | 'priority'
   | 'protein_short'
   | 'water_behind'
   | 'streak_risk'
@@ -49,6 +52,10 @@ export interface BriefingInput {
   mealHours: number[];
   sleepMinutes: number;
   challenges: BriefingChallenge[];
+  /** Abnormal markers from their reports (latest per area). */
+  findings: ReportFinding[];
+  /** Everything eaten today, by name. */
+  foods: string[];
 }
 
 export interface Briefing {
@@ -211,6 +218,29 @@ export function buildBriefing(i: BriefingInput): Briefing {
       actions: [{ kind: 'log_meal', label: 'Log dinner' }],
       why: why('Finishing on target is the win.'),
       facts: { left },
+    };
+  }
+
+  // 5½. Their own priority (from a report they shared): the food or habit that helps, now,
+  //     unless today's log already covers it. Said as a feeling, not a lab number.
+  const tip = priorityTip({
+    hour: i.hour,
+    diet: i.diet,
+    allergies: i.allergies,
+    findings: i.findings,
+    foods: i.foods,
+  });
+  if (tip) {
+    return {
+      ...base,
+      kind: 'priority',
+      headline: tip.headline,
+      actions:
+        tip.action === 'log_meal'
+          ? [{ kind: 'log_meal', label: 'Log a meal' }]
+          : [{ kind: 'ask', label: 'Do it', prompt: tip.prompt! }],
+      why: why(`${cap(tip.feel)}.`),
+      facts: { area: tip.area },
     };
   }
 

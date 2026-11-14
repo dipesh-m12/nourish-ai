@@ -13,7 +13,7 @@ import { buildBriefing, type BriefingInput } from './briefing.rules';
 const whySchema = z.strictObject({ why: z.string().min(4).max(160) });
 
 const WHY_SYSTEM = `You write one short line for a health app's daily briefing card.
-Given today's advice and the user's own reason for their goal, write ONE sentence (max 18 words, second person) that connects the two warmly, e.g. "Every bit of protein keeps you strong enough to keep up with your daughter."
+Given today's advice, the user's own reason for their goal, and what they've said they care about lately (caresAbout), write ONE sentence (max 18 words, second person) that connects the advice to what they care about most, warmly, e.g. "Every bit of protein keeps you strong enough to keep up with your daughter." Describe benefits as feelings ("more energy on the stairs"), never as lab values.
 Rules: no numbers, no medical claims, no promises of results, no emojis, no quotes. Same language as the input.`;
 
 const REWRITE_TIMEOUT_MS = 6000;
@@ -29,13 +29,22 @@ const sentence = (t: string) => {
   return s.charAt(0).toUpperCase() + s.slice(1);
 };
 
-async function personalWhy(advice: string, kind: string, userWhy: string, key: string) {
+async function personalWhy(
+  advice: string,
+  kind: string,
+  userWhy: string,
+  caresAbout: string[],
+  key: string,
+) {
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.why;
 
   const call = generateStructured(
     whySchema,
-    { system: WHY_SYSTEM, user: JSON.stringify({ advice, kind, theirReason: userWhy }) },
+    {
+      system: WHY_SYSTEM,
+      user: JSON.stringify({ advice, kind, theirReason: userWhy, caresAbout }),
+    },
     (v) => (hasDigits(v.why) ? 'contains a number' : null),
     { fast: true },
   ).then((r) => sentence(r.data.why));
@@ -55,7 +64,32 @@ async function personalWhy(advice: string, kind: string, userWhy: string, key: s
 }
 
 export const briefingService = {
+  /** The card for the dashboard: rules + the AI's personal "why" line. */
   async forDay(profileId: string, date: string, tz: number) {
+    const { rules, input, focuses } = await this.rulesFor(profileId, date, tz);
+    const why = await personalWhy(
+      rules.headline,
+      rules.kind,
+      input.why,
+      focuses,
+      // Same advice + same priorities = same line (no new AI call).
+      `${profileId}:${rules.kind}:${rules.headline}:${focuses.join('|')}:${input.why}`,
+    );
+
+    return {
+      kind: rules.kind,
+      greeting: rules.greeting,
+      headline: rules.headline,
+      why: why ?? rules.why,
+      week: rules.week,
+      actions: rules.actions,
+      /** "ai" when the personal line was written by the model; "rules" when the fallback stood. */
+      voice: why ? ('ai' as const) : ('rules' as const),
+    };
+  },
+
+  /** Rules only, no AI call: what push nudges use (cheap enough to run for every user). */
+  async rulesFor(profileId: string, date: string, tz: number) {
     const ctx = await buildContext(profileId, date, tz);
     const today = ctx.raw;
 
@@ -69,6 +103,8 @@ export const briefingService = {
       eaten: { calories: today.eaten.calories, proteinG: today.eaten.proteinG },
       mealHours: today.meals.map((m) => localClock(tz, new Date(m.createdAt)).hour),
       sleepMinutes: today.burn.sleepMinutes,
+      findings: ctx.priorities.findings,
+      foods: today.meals.flatMap((m) => [m.title, ...m.items.map((it) => it.name)]),
       challenges: today.challenges.map((c) => ({
         id: c.id,
         label: c.tracking.label ?? c.title,
@@ -84,23 +120,6 @@ export const briefingService = {
       })),
     };
 
-    const rules = buildBriefing(input);
-    const why = await personalWhy(
-      rules.headline,
-      rules.kind,
-      input.why,
-      `${profileId}:${rules.kind}:${input.why}`,
-    );
-
-    return {
-      kind: rules.kind,
-      greeting: rules.greeting,
-      headline: rules.headline,
-      why: why ?? rules.why,
-      week: rules.week,
-      actions: rules.actions,
-      /** "ai" when the personal line was written by the model; "rules" when the fallback stood. */
-      voice: why ? ('ai' as const) : ('rules' as const),
-    };
+    return { rules: buildBriefing(input), input, focuses: ctx.priorities.focuses };
   },
 };

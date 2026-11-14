@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { localDate } from './challenge.validator';
-import { imageInputSchema } from './image.validator';
+import { imageInputSchema, reportInputSchema } from './image.validator';
 
 const tz = z.coerce.number().int().min(-720).max(840).default(0);
 
@@ -11,6 +11,8 @@ export const agentMessageSchema = z.object({
   tz,
   text: z.string().trim().min(1, 'Say something first').max(500),
   image: imageInputSchema.optional(),
+  /** A health report (PDF or photo): the assistant proposes challenges from it. */
+  report: reportInputSchema.optional(),
 });
 
 /** Card edits (amount, items) plus the proof photo. Each field is re-checked by the service. */

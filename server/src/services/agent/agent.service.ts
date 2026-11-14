@@ -22,10 +22,12 @@ import {
 import { buildContext, readSlice, type AgentContext } from './agent.context';
 import { checkTurn, messageGuardrail, refusalFor } from './agent.guardrails';
 import { runTurnLoop } from './agent.loop';
-import type { ImageUpload } from '../../validators/image.validator';
+import type { ImageUpload, ReportUpload } from '../../validators/image.validator';
+import { challengeGoalService } from '../challenges/challenge-goal.service';
 import { openingNudge } from './agent.nudges';
 import { AGENT_SYSTEM } from './agent.prompt';
 import { turnSchema, type Turn } from './agent.schema';
+import { signalsService } from '../priorities/signals.service';
 
 /** Messages a user can send before the paywall asks for a plan (enforced with subscriptions). */
 export const FREE_MESSAGES = 5;
@@ -63,6 +65,7 @@ const expired = (a: AgentAction) =>
 function cleanAsk(ask: Turn['ask']): AgentAsk | null {
   if (ask.kind === 'photo') return { kind: 'photo' };
   if (ask.kind === 'challenges') return { kind: 'challenges' };
+  if (ask.kind === 'reminders') return { kind: 'reminders' };
   if (ask.kind === 'choice') {
     const options = [...new Set(ask.options.map((o) => o.trim()).filter(Boolean))].slice(0, 5);
     return options.length >= 2 ? { kind: 'choice', options } : null;
@@ -224,7 +227,7 @@ export const agentService = {
   /** One user message → the assistant's reply (maybe with an inline input or an action card). */
   async send(
     profileId: string,
-    input: { date: string; tz: number; text: string; image?: ImageUpload },
+    input: { date: string; tz: number; text: string; image?: ImageUpload; report?: ReportUpload },
   ) {
     const hourAgo = new Date(Date.now() - 60 * 60 * 1000);
     const [recent] = await db
@@ -267,6 +270,44 @@ export const agentService = {
       return { messages: await messagesOf(conv.id), usage: await usage(profileId) };
     }
 
+    // A report: read it, propose challenges from what matters, confirm on a card.
+    if (input.report) {
+      let proposal;
+      try {
+        proposal = await challengeGoalService.propose(profileId, {
+          date: input.date,
+          text: input.text,
+          image: input.report,
+        });
+      } catch (err) {
+        await say(
+          conv.id,
+          profileId,
+          err instanceof AppError
+            ? err.message
+            : 'I couldn’t read that report. Try a clearer photo?',
+        );
+        return { messages: await messagesOf(conv.id), usage: await usage(profileId) };
+      }
+      if (!proposal.proposals.length) {
+        await say(conv.id, profileId, proposal.reply);
+      } else {
+        const [action] = await db
+          .insert(agentActions)
+          .values({
+            profileId,
+            conversationId: conv.id,
+            kind: 'create_challenges',
+            payload: {
+              items: proposal.proposals.map(({ ask: _ask, ...c }) => c),
+            },
+          })
+          .returning();
+        await say(conv.id, profileId, proposal.reply, { actionId: action!.id });
+      }
+      return { messages: await messagesOf(conv.id), usage: await usage(profileId) };
+    }
+
     if (input.image) {
       const card = await prepareMealPhoto(profileId, input.date, input.image);
       if ('error' in card) {
@@ -302,6 +343,16 @@ export const agentService = {
     } catch {
       await say(conv.id, profileId, 'Sorry, I couldn’t think that through just now. Try again?');
       return { messages: await messagesOf(conv.id), usage: await usage(profileId) };
+    }
+
+    // A concern they just told us becomes one of their priorities (briefing, nudges, chat).
+    if (turn.topic === 'wellness' && turn.concern.trim()) {
+      await signalsService.record(profileId, {
+        kind: 'ask',
+        said: input.text,
+        focus: turn.concern,
+        findings: [],
+      });
     }
 
     const refused = refusalFor(turn);

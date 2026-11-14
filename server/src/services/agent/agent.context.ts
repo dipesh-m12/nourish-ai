@@ -4,6 +4,7 @@ import { goals, profiles } from '../../db/schema';
 import { AppError } from '../../utils/app-error';
 import { challengeProgressService } from '../challenges/challenge-progress.service';
 import { planService } from '../plan/plan.service';
+import { signalsService } from '../priorities/signals.service';
 
 export type PartOfDay = 'morning' | 'afternoon' | 'evening' | 'night';
 
@@ -22,7 +23,7 @@ export function localClock(tzOffsetMinutes: number, now = new Date()) {
  * and today's numbers. Built from the same services the dashboard uses, so they always agree.
  */
 export async function buildContext(profileId: string, date: string, tz: number) {
-  const [profile, goal, today, plan] = await Promise.all([
+  const [profile, goal, today, plan, priorities] = await Promise.all([
     db.query.profiles.findFirst({
       where: and(eq(profiles.id, profileId), isNull(profiles.deletedAt)),
     }),
@@ -32,6 +33,8 @@ export async function buildContext(profileId: string, date: string, tz: number) 
       if (err instanceof AppError && err.statusCode === 404) return null;
       throw err; // An unavailable plan isn't the same as an empty plan.
     }),
+    // What they told us they care about ("+" asks, report findings): the PA follows it.
+    signalsService.priorities(profileId),
   ]);
   if (!profile || !goal || !today.targets) {
     throw new AppError(409, 'Finish onboarding to use the assistant');
@@ -44,9 +47,17 @@ export async function buildContext(profileId: string, date: string, tz: number) 
     tz,
     name: profile.name,
     raw: today,
+    priorities,
     /** What goes into the prompt: compact, numbers already computed. */
     prompt: {
       now: `${date} ${clock.hhmm} (${clock.part})`,
+      // Their own priorities: what they asked for lately and what their reports showed.
+      priorities: {
+        caresAbout: priorities.focuses,
+        reportFindings: priorities.findings.map(
+          (f) => `${f.marker} ${f.value} ${f.unit} (${f.flag})`,
+        ),
+      },
       user: {
         name: profile.name,
         age: profile.age,

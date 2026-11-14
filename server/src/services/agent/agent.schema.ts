@@ -6,12 +6,17 @@ import { z } from 'zod';
  */
 export const turnSchema = z.strictObject({
   topic: z.enum(['wellness', 'app_help', 'off_topic', 'prompt_attack', 'unsafe']),
+  /**
+   * A health concern or goal the user states in THIS message, in a few words ("knee pain on
+   * stairs"); "" when there's none. Remembered as one of their priorities.
+   */
+  concern: z.string().max(60),
   /** What the assistant says. Short. */
   say: z.string().min(1).max(500),
   /** An inline input for the user's next answer. */
   ask: z.strictObject({
     /** photo: the app shows camera/gallery and sends the picture back (client-side tool). */
-    kind: z.enum(['none', 'choice', 'number', 'photo', 'challenges']),
+    kind: z.enum(['none', 'choice', 'number', 'photo', 'challenges', 'reminders']),
     options: z.array(z.string().max(32)).max(6),
     unit: z.string().max(12),
     min: z.number(),

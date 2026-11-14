@@ -10,16 +10,19 @@ import {
 import type { ImageUpload } from '../../validators/image.validator';
 import { activeKcalAt, MAX_SLEEP_HOURS, MET, sleepKcal } from '../burn/burn.math';
 import { burnService } from '../burn/burn.service';
+import { challengeGoalService } from '../challenges/challenge-goal.service';
 import { challengeProgressService } from '../challenges/challenge-progress.service';
-import { verifyProof } from '../challenges/proof.service';
 import { exerciseService } from '../exercises/exercise.service';
 import { mealService } from '../meals/meal.service';
 import { planService } from '../plan/plan.service';
 import type { AgentContext } from './agent.context';
 import type { Proposal } from './agent.schema';
 
-/** Logs need a photo the AI accepts, exactly like logging from the dashboard. */
-export const NEEDS_PHOTO = new Set(['log_meal', 'log_activity', 'log_challenge', 'log_sleep']);
+/**
+ * Cards that can't be confirmed without a photo. Empty since 1.1: photo proof was dropped (no
+ * competition = nothing to cheat for). A meal photo, when given, is still saved with the meal.
+ */
+export const NEEDS_PHOTO = new Set<string>();
 
 const LOGGABLE = new Set<string>(activityKindEnum.enumValues.filter((k) => k !== 'sleep'));
 
@@ -251,20 +254,6 @@ export async function execute(
     case 'log_meal': {
       const items = input.items ?? (payload.items as ConfirmInput['items'])!;
       const title = payload.title as string;
-      // The photo has to show food, like every other proof in the app.
-      const verdict = await verifyProof(
-        { title: `Meal: ${title}`, target: '1 meal', frequency: 'daily' },
-        {
-          kind: 'check',
-          unit: null,
-          target: 1,
-          step: 1,
-          widget: 'check',
-          proof: 'the food or the plate',
-        },
-        image!,
-      );
-      if (!verdict.verified) return { ok: false, note: verdict.note };
       // Only conflicts still on the plate count: removing the off-diet food in the card lifts
       // the block, same as the meal sheet. save() re-checks the final items by name too.
       const kept = new Set(items.map((i) => i.name.toLowerCase()));
@@ -282,7 +271,9 @@ export async function execute(
             ? []
             : ((payload.credits as { challengeId: string; amount: number }[]) ?? []),
         },
-        { bytes: Buffer.from(image!.base64, 'base64'), mimeType: image!.mimeType },
+        image
+          ? { bytes: Buffer.from(image.base64, 'base64'), mimeType: image.mimeType }
+          : undefined,
       );
       return {
         ok: true,
@@ -302,9 +293,7 @@ export async function execute(
           ? { exerciseId: payload.exerciseId as string }
           : { kind: payload.activity as Exclude<ActivityKind, 'sleep'> }),
         ...(minutes ? { minutes } : { calories }),
-        image: image!,
       });
-      if (!r.verified) return { ok: false, note: r.note };
       return {
         ok: true,
         summary: `Logged ${r.activity.label} · ${r.activity.calories} kcal burned`,
@@ -318,7 +307,7 @@ export async function execute(
         profileId,
         payload.challengeId as string,
         date,
-        image!,
+        image,
         payload.check ? undefined : amount,
       );
       if (!r.verified) return { ok: false, note: r.note };
@@ -339,14 +328,13 @@ export async function execute(
           profileId,
           payload.challengeId as string,
           date,
-          image!,
+          image,
           hours,
         );
         if (!r.verified) return { ok: false, note: r.note };
         return { ok: true, summary: `Logged ${hours} h of sleep`, result: { hours } };
       }
-      const r = await burnService.logSleep(profileId, { date, hours, image: image! });
-      if (!r.verified) return { ok: false, note: r.note };
+      const r = await burnService.logSleep(profileId, { date, hours });
       return {
         ok: true,
         summary: `Logged ${hours} h of sleep · ${r.activity.calories} kcal`,
@@ -361,6 +349,16 @@ export async function execute(
       for (const c of payload.accept as { id: string }[]) current.add(c.id);
       await planService.setAcceptedChallenges(profileId, [...current]);
       return { ok: true, summary: 'Challenges updated', result: { accepted: current.size } };
+    }
+
+    case 'create_challenges': {
+      const items = payload.items as Parameters<typeof challengeGoalService.create>[1]['items'];
+      const rows = await challengeGoalService.create(profileId, { date, items });
+      return {
+        ok: true,
+        summary: `${rows.length} challenge${rows.length > 1 ? 's' : ''} on your day`,
+        result: { created: rows.length },
+      };
     }
 
     case 'remove_last': {
