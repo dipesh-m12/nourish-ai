@@ -52,7 +52,7 @@ const MOMENTS: Partial<Record<BriefingKind, Moment>> = {
   },
   water_behind: { key: () => 'water', hours: [11, 18], title: 'A glass of water?' },
   // From their own report: once a day, at a meal hour.
-  priority: { key: () => 'priority', hours: [12, 21], title: 'For what you asked about' },
+  priority: { key: () => 'priority', hours: [12, 21], title: 'From your report' },
   protein_short: { key: () => 'protein', hours: [15, 20], title: 'Stay full till dinner' },
   open_challenges: { key: () => 'challenges', hours: [17, 20], title: 'Still time today' },
   streak_risk: { key: () => 'streak', hours: [19, 22], title: 'Keep your streak alive' },

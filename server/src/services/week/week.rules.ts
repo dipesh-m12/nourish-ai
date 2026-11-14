@@ -141,8 +141,9 @@ export function buildWeek(i: WeekInput): WeekReview {
   const sorted = [...rated].sort((a, b) => b.rate - a.rate);
   const best = sorted[0] && sorted[0].rate > 0 ? sorted[0].label : null;
   const worst = sorted.length > 1 ? sorted[sorted.length - 1]! : null;
+  // Judge a habit only after a few days (day one, today still open, is not "missing" it).
   const focus =
-    worst && worst.rate < 0.6
+    worst && worst.active >= 3 && worst.rate < 0.6
       ? {
           label: worst.label,
           prompt: `I keep missing "${worst.label}" (${worst.done} of ${worst.active} days). Make it easier for me.`,

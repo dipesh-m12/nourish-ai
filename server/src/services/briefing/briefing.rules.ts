@@ -108,6 +108,10 @@ const greet = (hour: number, name: string) => {
 };
 
 /** 0 → 1 across the waking day: how much of a daily target "should" be done by now. */
+/** Night: from 23:00 to 05:00 the card only says rest. */
+const NIGHT_FROM = 23;
+const NIGHT_TO = 5;
+
 export function dayFraction(hour: number) {
   return Math.min(1, Math.max(0, (hour - DAY_START) / (DAY_END - DAY_START)));
 }
@@ -159,6 +163,18 @@ export function buildBriefing(i: BriefingInput): Briefing {
         : `Every challenge done today, and ${left} kcal still in hand. That's a full day.`,
       actions: bigGap ? [{ kind: 'log_meal', label: 'Log dinner' }] : [],
       why: why('This is what it looks like.'),
+      facts: { left },
+    };
+  }
+
+  // 1½. Late night: no "walk now?" at 2 am. A PA tells you to rest.
+  if (i.hour >= NIGHT_FROM || i.hour < NIGHT_TO) {
+    return {
+      ...base,
+      kind: 'on_track',
+      headline: 'It’s late. Rest well, tomorrow is a fresh start.',
+      actions: [],
+      why: why('Sleep is when the day’s work pays off.'),
       facts: { left },
     };
   }
@@ -318,7 +334,11 @@ export function buildBriefing(i: BriefingInput): Briefing {
   return {
     ...base,
     kind: 'on_track',
-    headline: `On track: ${left} kcal left and protein covered. Keep the rhythm.`,
+    // Only claim protein when there's some and it's on pace (not at 8 am with none eaten).
+    headline:
+      i.eaten.proteinG > 0 && proteinShort < PROTEIN_SLACK_G
+        ? `On track: ${left} kcal left and protein on pace. Keep the rhythm.`
+        : `On track: ${left} kcal left. Keep the rhythm.`,
     actions: [],
     why: why('Remember why.'),
     facts: { left },

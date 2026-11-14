@@ -12,7 +12,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
-    "test": "tsx --test tests/agent.test.ts tests/nudge.test.ts tests/expiry.test.ts tests/week.test.ts tests/duplicate.test.ts tests/priorities.test.ts tests/streak.test.ts",
+    "test": "tsx --test tests/agent.test.ts tests/nudge.test.ts tests/expiry.test.ts tests/week.test.ts tests/duplicate.test.ts tests/priorities.test.ts tests/streak.test.ts tests/food-challenge.test.ts",
     "worker": "tsx src/workers/index.ts",
     "worker:dev": "nodemon --exec tsx src/workers/index.ts",
     "start:worker": "node dist/workers/index.js"
