@@ -7,6 +7,7 @@ import {
   type Challenge,
   type ChallengeTracking,
   profiles,
+  sessions,
 } from '../../db/schema';
 import { AppError } from '../../utils/app-error';
 import { looksLikeImage } from '../../validators/image.validator';
@@ -17,7 +18,7 @@ import { burnService } from '../burn/burn.service';
 import { COMPANION_NAME, companionMood } from '../companion/companion.rules';
 import { profileService } from '../profile.service';
 import { mealService } from '../meals/meal.service';
-import { verifyProof } from './proof.service';
+import { activeChallenges, endedChallenges } from './active';
 import { ensureTracking } from './tracking.service';
 
 /** Longest streak we look back for (keeps the query bounded). */
@@ -128,7 +129,7 @@ async function logAsMeal(
   profileId: string,
   challenge: Challenge & { tracking: ChallengeTracking },
   date: string,
-  image: LogProgressInput['image'],
+  image: NonNullable<LogProgressInput['image']>,
 ) {
   const bytes = Buffer.from(image.base64, 'base64');
   if (!looksLikeImage(bytes, image.mimeType))
@@ -144,7 +145,15 @@ async function logAsMeal(
     };
   }
 
-  // The user tapped this challenge and the photo is food, so it counts even if the AI skipped it.
+  // Snapped for this challenge but it doesn't do what the challenge asks: say why, save nothing.
+  if (analysis.startedFit && !analysis.startedFit.fits) {
+    return {
+      verified: false as const,
+      note: `Doesn't count for ${analysis.startedFit.label}${
+        analysis.startedFit.note ? `: ${analysis.startedFit.note}` : ''
+      }. Use Log meal to still count its calories.`,
+    };
+  }
   const step = challenge.tracking.kind === 'check' ? 1 : challenge.tracking.step;
   const credits = analysis.credits.some((c) => c.challengeId === challenge.id)
     ? analysis.credits
@@ -243,16 +252,31 @@ export const challengeProgressService = {
   async today(profileId: string, today: string, tzOffsetMinutes = 0) {
     const from = addDays(today, -STREAK_LOOKBACK_DAYS);
     // Independent reads run in parallel: 3 round-trips to the database become 1.
-    const [goal, accepted, totals, day, burn] = await Promise.all([
+    const [goal, accepted, ended, totals, day, burn, running] = await Promise.all([
       db.query.goals.findFirst({ where: eq(goals.profileId, profileId) }),
       db
         .select()
         .from(challenges)
-        .where(and(eq(challenges.profileId, profileId), eq(challenges.accepted, true)))
+        .where(activeChallenges(profileId, today))
         .orderBy(asc(challenges.createdAt), asc(challenges.id)),
+      db
+        .select({ id: challenges.id, title: challenges.title, endsOn: challenges.endsOn })
+        .from(challenges)
+        .where(endedChallenges(profileId, today))
+        .orderBy(asc(challenges.endsOn)),
       dailyTotalsByChallenge(profileId, from, today),
       mealService.forDay(profileId, today),
       burnService.forDay(profileId, today),
+      // A walk or timer still going (the app was closed mid-way): the card offers "Resume".
+      db
+        .select({
+          id: sessions.id,
+          challengeId: sessions.challengeId,
+          kind: sessions.kind,
+          startedAt: sessions.startedAt,
+        })
+        .from(sessions)
+        .where(and(eq(sessions.profileId, profileId), eq(sessions.status, 'active'))),
     ]);
     const tracked = await ensureTracking(accepted); // no-op once specs are stored
 
@@ -264,6 +288,10 @@ export const challengeProgressService = {
       frequency: c.frequency,
       category: c.category,
       tracking: c.tracking,
+      endsOn: c.endsOn,
+      remindAt: c.remindAt,
+      place: c.place,
+      session: running.find((s) => s.challengeId === c.id) ?? null,
       // The server decides, so every client logs food the same way (and calories stay in sync).
       logsVia: isFoodChallenge(c) ? ('meal' as const) : ('proof' as const),
       progress: progressView(
@@ -293,12 +321,55 @@ export const challengeProgressService = {
       meals: day.meals,
       burn,
       challenges: items,
+      /** Past their last day: the app asks "keep going?" (extend) or "done" (retire). */
+      ended,
     };
   },
 
   /**
-   * One tap of progress, accepted only with photo proof the AI verifies.
-   * Rejected proof is not an error for the client: it gets the verdict and can retry.
+   * Health Connect sync: sets the day's auto-tracked amount (steps, sleep hours) instead of
+   * adding to it, so syncing twice never double-counts. Manual logs on the same day stay.
+   */
+  async sync(profileId: string, challengeId: string, date: string, amount: number) {
+    const [challenge] = await db
+      .select()
+      .from(challenges)
+      .where(and(eq(challenges.id, challengeId), activeChallenges(profileId, date)))
+      .limit(1);
+    if (!challenge) throw AppError.notFound('Challenge');
+    if (isFoodChallenge(challenge)) throw new AppError(400, 'Food challenges log with a photo');
+    const [tracked] = await ensureTracking([challenge]);
+
+    return db.transaction(async (tx) => {
+      const mine = and(
+        eq(challengeLogs.challengeId, challengeId),
+        eq(challengeLogs.localDate, date),
+        eq(challengeLogs.source, 'health_connect'),
+      );
+      // Its activity row goes with it (challenge_log_id cascades).
+      await tx.delete(challengeLogs).where(mine);
+      if (amount <= 0) return { amount: 0, burned: null };
+      const [row] = await tx
+        .insert(challengeLogs)
+        .values({ challengeId, profileId, localDate: date, amount, source: 'health_connect' })
+        .returning({ id: challengeLogs.id });
+      const burned = await burnService.fromChallengeLog(tx, {
+        profileId,
+        challenge,
+        tracking: tracked!.tracking,
+        amount,
+        date,
+        challengeLogId: row!.id,
+        source: 'health_connect',
+      });
+      return { amount, burned };
+    });
+  },
+
+  /**
+   * One tap of progress. Food challenges need the plate (it's saved as a meal, so calories move
+   * too); everything else counts straight away. Photo proof was dropped in 1.1: there's no
+   * competition, so there's nothing to cheat for, and the photo was only friction.
    */
   async log(
     profileId: string,
@@ -306,6 +377,9 @@ export const challengeProgressService = {
     date: string,
     image: LogProgressInput['image'],
     requested?: number,
+    source: LogProgressInput['source'] = 'manual',
+    /** A finished walk/timer: its activity row points back to the session (trophy card). */
+    sessionId?: string,
   ) {
     const [challenge] = await db
       .select()
@@ -313,33 +387,25 @@ export const challengeProgressService = {
       .where(and(eq(challenges.id, challengeId), eq(challenges.profileId, profileId)))
       .limit(1);
     if (!challenge || !challenge.accepted) throw AppError.notFound('Challenge');
+    if (challenge.endsOn && challenge.endsOn < date)
+      throw new AppError(409, 'This challenge has ended');
     const [[tracked], soFar] = await Promise.all([
       ensureTracking([challenge]),
       periodTotal(challenge, date),
     ]);
 
     // A food photo is a meal: log it as one, so the calorie ring moves with the challenge.
-    if (isFoodChallenge(challenge)) return logAsMeal(profileId, tracked!, date, image);
-
-    let verdict;
-    try {
-      verdict = await verifyProof(
-        challenge,
-        tracked!.tracking,
-        image,
-        loggedAmount(tracked!.tracking, requested, soFar),
-      );
-    } catch {
-      throw new AppError(502, 'We couldn’t check your photo right now. Please try again.');
+    if (isFoodChallenge(challenge)) {
+      if (!image) throw new AppError(400, 'Snap your plate to log this one');
+      return logAsMeal(profileId, tracked!, date, image);
     }
-    if (!verdict.verified) return { verified: false as const, note: verdict.note };
 
     const amount = loggedAmount(tracked!.tracking, requested, soFar);
     // The log and its burn land together: a walk or a night's sleep moves both at once.
     const burned = await db.transaction(async (tx) => {
       const [row] = await tx
         .insert(challengeLogs)
-        .values({ challengeId, profileId, localDate: date, amount, proofNote: verdict.note })
+        .values({ challengeId, profileId, localDate: date, amount, source })
         .returning({ id: challengeLogs.id });
       return burnService.fromChallengeLog(tx, {
         profileId,
@@ -349,8 +415,10 @@ export const challengeProgressService = {
         amount: requested ?? amount,
         date,
         challengeLogId: row!.id,
+        source,
+        sessionId,
       });
     });
-    return { verified: true as const, note: verdict.note, amount, burned };
+    return { verified: true as const, note: null, amount, burned };
   },
 };

@@ -1,7 +1,8 @@
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../../db';
-import { challenges, type Challenge, type ChallengeTracking } from '../../db/schema';
+import { challenges, profiles, type Challenge, type ChallengeTracking } from '../../db/schema';
+import { waterTargetL } from '../metrics.service';
 import { generateStructured } from '../ai/ai.service';
 
 /**
@@ -186,5 +187,37 @@ export async function ensureTracking(
     }),
   );
 
+  await personaliseWater(items);
   return items as (Challenge & { tracking: ChallengeTracking })[];
+}
+
+const isWater = (c: Challenge) =>
+  c.category === 'hydration' && /^(l|litres?|liters?)$/i.test(c.tracking?.unit ?? '');
+
+/**
+ * The numbers rule for water: the daily litres come from the user's weight and activity, not
+ * from the AI's text (which tended to say 3.5 L for everyone). Fixed once per change, then saved.
+ */
+async function personaliseWater(items: Challenge[]) {
+  const water = items.filter(isWater);
+  if (!water.length) return;
+  const profile = await db.query.profiles.findFirst({
+    where: eq(profiles.id, water[0]!.profileId),
+    columns: { weightKg: true, activityLevel: true },
+  });
+  if (!profile?.weightKg) return;
+  const target = waterTargetL(profile.weightKg, profile.activityLevel);
+  await Promise.all(
+    water
+      .filter((c) => c.tracking!.target !== target)
+      .map((c) => {
+        const tracking = { ...c.tracking!, target, step: Math.min(c.tracking!.step, 0.25) };
+        c.tracking = tracking;
+        c.target = `${target} L`;
+        return db
+          .update(challenges)
+          .set({ tracking, target: c.target })
+          .where(eq(challenges.id, c.id));
+      }),
+  );
 }

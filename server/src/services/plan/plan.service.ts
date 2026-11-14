@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, notInArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, notInArray, or, sql } from 'drizzle-orm';
 import { db } from '../../db';
 import {
   challenges,
@@ -70,9 +70,17 @@ function checkSampleDay(target: number) {
   };
 }
 
-function toChallengeView({ id, title, target, why, frequency, category, accepted }: Challenge) {
-  return { id, title, target, why, frequency, category, accepted };
+function toChallengeView(c: Challenge) {
+  const { id, title, target, why, frequency, category, accepted, endsOn, source } = c;
+  return { id, title, target, why, frequency, category, accepted, endsOn, source };
 }
+
+/** The picker's list: the plan's suggestions plus anything the user is running now. */
+const pickerRows = (profileId: string) =>
+  and(
+    eq(challenges.profileId, profileId),
+    or(eq(challenges.source, 'plan'), eq(challenges.accepted, true)),
+  );
 
 /** What the app receives: frozen metrics + AI content + the challenges to choose from. */
 function toPlanView(plan: Plan, goal: Pick<Goal, 'type' | 'why'>, items: Challenge[]) {
@@ -124,7 +132,10 @@ export const planService = {
         .values({ profileId, ...values })
         .onConflictDoUpdate({ target: plans.profileId, set: { ...values, createdAt: new Date() } })
         .returning();
-      await tx.delete(challenges).where(eq(challenges.profileId, profileId));
+      // Only the old suggestions are replaced; challenges the user asked for stay.
+      await tx
+        .delete(challenges)
+        .where(and(eq(challenges.profileId, profileId), eq(challenges.source, 'plan')));
       const inserted = await tx
         .insert(challenges)
         .values(suggested.map((c) => ({ ...c, profileId })))
@@ -142,7 +153,7 @@ export const planService = {
     const items = await db
       .select()
       .from(challenges)
-      .where(eq(challenges.profileId, profileId))
+      .where(pickerRows(profileId))
       .orderBy(asc(challenges.createdAt), asc(challenges.id));
     return toPlanView(plan, goal, items);
   },
@@ -168,7 +179,7 @@ export const planService = {
       const rows = await tx
         .select()
         .from(challenges)
-        .where(mine)
+        .where(pickerRows(profileId))
         .orderBy(asc(challenges.createdAt), asc(challenges.id));
       return rows.map(toChallengeView);
     });

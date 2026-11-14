@@ -10,21 +10,38 @@ import { mealController } from '../controllers/meal.controller';
 import { feedbackController } from '../controllers/feedback.controller';
 import { planController } from '../controllers/plan.controller';
 import { profileController } from '../controllers/profile.controller';
+import { sessionController } from '../controllers/session.controller';
+import {
+  finishSessionSchema,
+  startSessionSchema,
+  updateSessionSchema,
+} from '../validators/session.validator';
 import { requireAuth } from '../middlewares/auth';
 import { validateBody } from '../middlewares/validate';
 import { logActivitySchema } from '../validators/activity.validator';
 import { agentConfirmSchema, agentMessageSchema } from '../validators/agent.validator';
-import { transcribeSchema } from '../validators/audio.validator';
+import { speakSchema, transcribeSchema } from '../validators/audio.validator';
 import { avatarUploadSchema } from '../validators/avatar.validator';
-import { logProgressSchema } from '../validators/challenge.validator';
+import {
+  createChallengesSchema,
+  logProgressSchema,
+  placeSchema,
+  proposeChallengesSchema,
+  reminderPlanSchema,
+  reminderSchema,
+  setRemindersSchema,
+  syncProgressSchema,
+  updateExpirySchema,
+} from '../validators/challenge.validator';
 import {
   analyzeMealSchema,
   estimateItemSchema,
+  mealNoteSchema,
   saveMealSchema,
 } from '../validators/meal.validator';
 import { createFeedbackSchema } from '../validators/feedback.validator';
 import { acceptChallengesSchema } from '../validators/plan.validator';
-import { onboardingSchema, preferencesSchema } from '../validators/profile.validator';
+import { deviceSchema, onboardingSchema, preferencesSchema } from '../validators/profile.validator';
 
 // Everything here acts on the profile in the JWT. No ids in URLs or bodies.
 const router = Router();
@@ -35,6 +52,7 @@ router.delete('/', profileController.deleteMe);
 router.put('/avatar', validateBody(avatarUploadSchema), profileController.uploadAvatar);
 router.delete('/avatar', profileController.removeAvatar);
 router.put('/preferences', validateBody(preferencesSchema), profileController.setPreferences);
+router.put('/device', validateBody(deviceSchema), profileController.registerDevice);
 router.post('/onboarding', validateBody(onboardingSchema), profileController.completeOnboarding);
 
 router.post('/plan', planController.generate);
@@ -42,11 +60,44 @@ router.get('/plan', planController.get);
 router.put('/challenges', validateBody(acceptChallengesSchema), planController.acceptChallenges);
 
 router.get('/today', challengeController.today);
+router.get('/week', challengeController.week);
 router.get('/briefing', briefingController.get);
 router.post('/challenges/:id/logs', validateBody(logProgressSchema), challengeController.log);
+router.post(
+  '/challenges/propose',
+  validateBody(proposeChallengesSchema),
+  challengeController.propose,
+);
+router.post('/challenges', validateBody(createChallengesSchema), challengeController.create);
+router.patch(
+  '/challenges/:id/expiry',
+  validateBody(updateExpirySchema),
+  challengeController.updateExpiry,
+);
+router.post('/challenges/:id/finish', challengeController.finish);
+router.put('/challenges/:id/place', validateBody(placeSchema), challengeController.setPlace);
+router.put(
+  '/challenges/:id/reminder',
+  validateBody(reminderSchema),
+  challengeController.setReminder,
+);
+router.put('/challenges/:id/sync', validateBody(syncProgressSchema), challengeController.sync);
+
+// All reminders in one place: several at once, or said in words (AI plan → user confirms).
+router.post('/reminders/plan', validateBody(reminderPlanSchema), challengeController.planReminders);
+router.put('/reminders', validateBody(setRemindersSchema), challengeController.setReminders);
+
+// Walks and timers that survive the app closing; finished walks are trophy cards.
+router.post('/sessions', validateBody(startSessionSchema), sessionController.start);
+router.get('/sessions/active', sessionController.active);
+router.get('/sessions/:id', sessionController.get);
+router.patch('/sessions/:id', validateBody(updateSessionSchema), sessionController.update);
+router.post('/sessions/:id/finish', validateBody(finishSessionSchema), sessionController.finish);
+router.post('/sessions/:id/cancel', sessionController.cancel);
 
 router.post('/meals/analyze', validateBody(analyzeMealSchema), mealController.analyze);
 router.post('/meals/items/estimate', validateBody(estimateItemSchema), mealController.estimateItem);
+router.post('/meals/note', validateBody(mealNoteSchema), mealController.note);
 router.post('/meals', validateBody(saveMealSchema), mealController.save);
 router.delete('/meals/:id', mealController.remove);
 
@@ -71,6 +122,7 @@ router.post('/agent/actions/:id/cancel', agentController.cancel);
 
 // Speech to text for voice input anywhere in the app (search now, the assistant next).
 router.post('/transcribe', validateBody(transcribeSchema), voiceController.transcribe);
+router.post('/speak', validateBody(speakSchema), voiceController.speak);
 
 // Mochi's Club (subscription). The checkout page is HTML for the app's WebView.
 router.get('/subscription', billingController.summary);
