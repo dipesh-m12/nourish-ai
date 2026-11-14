@@ -1,0 +1,34 @@
+# EAS uses this file INSTEAD of .gitignore when packing the project for a build.
+# Same rules as .gitignore, except google-services.json is allowed in (the APK needs it).
+# Keep the two in sync.
+
+node_modules/
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+.metro-health-check*
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+.DS_Store
+*.pem
+.env
+.env*
+*.tsbuildinfo
+example
+/ios
+/android
+builds/
+*.apk
+*.aab
+
+# The Firebase admin key is for the server / `eas credentials` only. Never in the app.
+*firebase-adminsdk*.json

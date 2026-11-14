@@ -42,3 +42,15 @@ example
 /ios
 /android
 .env
+
+# local native builds (scripts/wsl-build.sh)
+builds/
+*.apk
+*.aab
+
+# Firebase: app config (built into the APK via .easignore) and the admin key (never shipped, never committed)
+google-services.json
+*firebase-adminsdk*.json
+
+# Raw Gemini art sources (shipped versions are WebP in assets/images/world, cat)
+assets/images/v1/

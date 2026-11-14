@@ -2,22 +2,36 @@
   "expo": {
     "name": "Nourish AI",
     "slug": "nourish-ai",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "nourishai",
     "userInterfaceStyle": "light",
-    "ios": {
-      "bundleIdentifier": "com.nourishai.app"
-    },
+    "platforms": [
+      "android",
+      "web"
+    ],
     "android": {
+      "versionCode": 2,
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#E1F1E6",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/icon.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.nourishai.app"
+      "package": "com.nourishai.app",
+      "permissions": [
+        "android.permission.health.READ_STEPS",
+        "android.permission.health.READ_DISTANCE",
+        "android.permission.health.READ_SLEEP",
+        "android.permission.health.READ_EXERCISE",
+        "android.permission.health.READ_ACTIVE_CALORIES_BURNED",
+        "android.permission.health.READ_WEIGHT",
+        "android.permission.health.READ_HYDRATION",
+        "android.permission.ACTIVITY_RECOGNITION",
+        "com.android.alarm.permission.SET_ALARM"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -38,27 +52,61 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Nourish AI uses your photos as proof for your challenges.",
-          "cameraPermission": "Nourish AI uses your camera to snap proof of your challenges."
+          "photosPermission": "Nourish AI uses your photos to log meals and read health reports.",
+          "cameraPermission": "Nourish AI uses your camera to snap your meals."
         }
       ],
       [
         "expo-audio",
         {
-          "microphonePermission": "Nourish AI uses the microphone so you can say what you ate."
+          "microphonePermission": "Nourish AI uses the microphone so you can talk to your assistant."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#1F7A55",
+          "defaultChannel": "nourish-reminders"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Nourish AI uses your location to know when you reach your park or gym.",
+          "locationAlwaysAndWhenInUsePermission": "Nourish AI checks in when you reach your park or gym, even when the app is closed.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ],
+      [
+        "expo-sensors",
+        {
+          "motionPermission": "Nourish AI counts your steps for walking challenges."
         }
       ],
       [
         "expo-build-properties",
         {
           "android": {
-            "buildArchs": ["arm64-v8a"],
+            "minSdkVersion": 26,
+            "buildArchs": [
+              "arm64-v8a"
+            ],
             "enableMinifyInReleaseBuilds": true,
             "enableShrinkResourcesInReleaseBuilds": true,
             "enablePngCrunchInReleaseBuilds": true
           }
         }
-      ]
+      ],
+      "expo-localization",
+      "expo-sharing",
+      "@react-native-community/datetimepicker",
+      "react-native-health-connect",
+      "@maplibre/maplibre-react-native",
+      "expo-status-bar",
+      "expo-web-browser",
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true,

@@ -11,6 +11,12 @@
         "EXPO_PUBLIC_POSTHOG_HOST": "https://us.i.posthog.com"
       }
     },
+    "development": {
+      "extends": "base",
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": { "buildType": "apk", "gradleCommand": ":app:assembleDebug" }
+    },
     "preview": {
       "extends": "base",
       "distribution": "internal",
