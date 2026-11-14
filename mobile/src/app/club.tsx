@@ -24,7 +24,7 @@ type Cell = true | false | string;
 const FEATURES: { label: string; free: Cell; club: Cell }[] = [
   { label: 'Snap meals, calories & macros', free: true, club: true },
   { label: 'AI plan built on your why', free: true, club: true },
-  { label: 'Challenges, streaks & photo proof', free: true, club: true },
+  { label: 'Challenges & streaks', free: true, club: true },
   { label: 'Daily briefing', free: true, club: true },
   { label: 'Burn & exercise library', free: true, club: true },
   { label: 'Mochi, your companion', free: true, club: true },

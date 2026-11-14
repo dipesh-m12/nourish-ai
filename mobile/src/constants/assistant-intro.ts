@@ -30,6 +30,6 @@ export const ASSISTANT_INTRO = [
     image: require('@/assets/images/chat/chat-4-undo.webp'),
     aspect: 960 / 753,
     title: 'You stay in charge',
-    body: 'Nothing is logged until you confirm it with a photo. Changed your mind? Just say undo.',
+    body: 'Nothing is logged until you confirm. Changed your mind? Say undo.',
   },
 ] as const;

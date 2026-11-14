@@ -1,8 +1,9 @@
+import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { View } from 'react-native';
 import { useGeneratePlan } from '@/api/plan';
-import { useCompleteOnboarding } from '@/api/profiles';
+import { useCompleteOnboarding, useMarkWhatsNewSeen } from '@/api/profiles';
 import { BuildingPlan } from '@/components/plan/building-plan';
 import { PlanReveal } from '@/components/plan/plan-reveal';
 import { Button } from '@/components/ui/button';
@@ -10,13 +11,14 @@ import { Heading, Text } from '@/components/ui/text';
 import { toOnboardingPayload, useOnboarding } from '@/store/onboarding';
 
 /**
- * Last onboarding step: save answers → AI writes the plan (with a waiting screen) → reveal,
- * where the user picks which challenges to take on.
+ * Last onboarding step: save answers → AI writes the plan (with a waiting screen) → reveal.
+ * Challenges are picked on the dashboard afterwards.
  */
 export default function PlanStep() {
   const { draft, reset } = useOnboarding();
   const complete = useCompleteOnboarding();
   const generate = useGeneratePlan();
+  const markWhatsNewSeen = useMarkWhatsNewSeen();
   const started = useRef(false);
   const payload = toOnboardingPayload(draft);
 
@@ -33,7 +35,8 @@ export default function PlanStep() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (!payload) {
+  // Once the plan exists the draft is no longer needed (it's cleared on the way out).
+  if (!payload && !generate.data) {
     // Draft was lost (e.g. storage cleared): restart instead of showing a broken screen.
     return (
       <Problem
@@ -72,8 +75,12 @@ export default function PlanStep() {
       name={complete.data?.name ?? ''}
       plan={generate.data}
       onDone={() => {
-        reset();
+        // New users start on this version: nothing is "new" to them.
+        const version = Constants.expoConfig?.version;
+        if (version) markWhatsNewSeen.mutate(version);
+        // Leave first, then clear the draft, so this screen never re-renders without answers.
         router.replace('/dashboard');
+        setTimeout(reset, 0);
       }}
     />
   );

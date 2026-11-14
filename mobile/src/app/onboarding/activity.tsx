@@ -12,7 +12,7 @@ export default function ActivityStep() {
   return (
     <StepScreen
       title="How active is a normal week?"
-      subtitle="Be honest. A realistic answer makes a plan you can actually stick to."
+      subtitle="Be honest. It makes a plan you’ll keep."
       canContinue={Boolean(draft.activityLevel)}
       onContinue={goNext}
     >

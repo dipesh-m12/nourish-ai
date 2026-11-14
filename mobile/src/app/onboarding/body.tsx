@@ -60,7 +60,7 @@ export default function BodyStep() {
   return (
     <StepScreen
       title="Your height and weight"
-      subtitle="Used to set your daily calories. Only you can see this."
+      subtitle="Sets your daily calories. Only you see it."
       canContinue={valid}
       onContinue={() => {
         update({ heightCm, weightKg: Math.round(weightKg! * 10) / 10 });

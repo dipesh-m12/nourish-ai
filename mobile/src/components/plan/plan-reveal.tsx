@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { BackHandler, Pressable, ScrollView, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown, FadeInRight } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAcceptChallenges } from '@/api/plan';
 import { CalorieRing } from '@/components/calorie-ring';
 import { ConfettiBurst } from '@/components/confetti-burst';
 import { MacroTiles } from '@/components/macro-tiles';
@@ -14,16 +13,15 @@ import { Heading, Text } from '@/components/ui/text';
 import { WhyCard } from '@/components/why-card';
 import { colors } from '@/constants/colors';
 import type { Plan } from '@/types/plan';
-import { ChallengeRow } from './challenge-row';
 import { JourneyCard } from './journey-card';
-import { FocusHabits, SampleDay, SectionTitle } from './plan-sections';
+import { FocusHabits, PlanMore, SectionTitle } from './plan-sections';
 
-const PAGES = ['numbers', 'plan', 'challenges'] as const;
+const PAGES = ['numbers', 'plan'] as const;
 type Page = (typeof PAGES)[number];
 
-const NEXT_LABEL: Record<Exclude<Page, 'challenges'>, string> = {
+const NEXT_LABEL: Record<Page, string> = {
   numbers: 'See your plan',
-  plan: 'Pick your challenges',
+  plan: 'Start my day',
 };
 
 interface Props {
@@ -33,15 +31,13 @@ interface Props {
 }
 
 /**
- * The plan, revealed in three short steps instead of one long scroll:
- * 1. your numbers  2. your plan  3. pick challenges.
- * One idea per screen, the same pattern as onboarding, so it's familiar and easy to read.
+ * The plan, revealed in two short steps: 1. your numbers  2. your plan.
+ * Challenges are not picked here any more (1.1): the dashboard starts empty and suggests them,
+ * so the user commits where they'll actually do them.
  */
 export function PlanReveal({ name, plan, onDone }: Props) {
   const insets = useSafeAreaInsets();
-  const accept = useAcceptChallenges();
   const [pageIndex, setPageIndex] = useState(0);
-  const [picked, setPicked] = useState<Set<string>>(new Set());
   const page = PAGES[pageIndex]!;
 
   useEffect(() => {
@@ -58,25 +54,10 @@ export function PlanReveal({ name, plan, onDone }: Props) {
     return () => sub.remove();
   }, [pageIndex]);
 
-  const toggle = (id: string) =>
-    setPicked((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-
-  const count = picked.size;
   const onPrimary = () => {
-    if (page === 'challenges') accept.mutate([...picked], { onSuccess: onDone });
+    if (pageIndex === PAGES.length - 1) onDone();
     else setPageIndex((i) => i + 1);
   };
-  const primaryLabel =
-    page !== 'challenges'
-      ? NEXT_LABEL[page]
-      : count
-        ? `Start with ${count} challenge${count > 1 ? 's' : ''}`
-        : 'Start without challenges';
 
   return (
     <View className="flex-1">
@@ -108,9 +89,6 @@ export function PlanReveal({ name, plan, onDone }: Props) {
         >
           {page === 'numbers' && <NumbersPage name={name} plan={plan} />}
           {page === 'plan' && <PlanPage plan={plan} />}
-          {page === 'challenges' && (
-            <ChallengesPage plan={plan} picked={picked} onToggle={toggle} />
-          )}
         </Animated.View>
       </ScrollView>
 
@@ -118,10 +96,7 @@ export function PlanReveal({ name, plan, onDone }: Props) {
         className="border-t border-line bg-bg px-6 pt-3"
         style={{ paddingBottom: Math.max(insets.bottom, 16) }}
       >
-        {accept.isError && (
-          <Text className="mb-2 text-center text-sm text-danger">{accept.error.message}</Text>
-        )}
-        <Button label={primaryLabel} onPress={onPrimary} loading={accept.isPending} />
+        <Button label={NEXT_LABEL[page]} onPress={onPrimary} />
       </View>
 
       {/* Last child = drawn on top. Plays once, with the success haptic, then removes itself. */}
@@ -135,10 +110,7 @@ function NumbersPage({ name, plan }: { name: string; plan: Plan }) {
   const { metrics } = plan;
   return (
     <View>
-      <Text className="font-sans-semibold text-sm uppercase tracking-wider text-primary">
-        Your plan is ready
-      </Text>
-      <Heading className="mt-1">Here’s your plan, {name}.</Heading>
+      <Heading>{name ? `${name}, here’s your plan.` : 'Here’s your plan.'}</Heading>
       <Text className="mt-3 leading-relaxed text-muted">{plan.encouragement}</Text>
 
       <Animated.View entering={FadeInDown.delay(150).duration(400)} className="mt-6">
@@ -147,7 +119,7 @@ function NumbersPage({ name, plan }: { name: string; plan: Plan }) {
 
       <View className="mt-6 items-center rounded-2xl bg-card py-6">
         <Text className="mb-4 font-sans-semibold text-sm uppercase tracking-wider text-muted">
-          Your daily target
+          Daily target
         </Text>
         <CalorieRing calories={metrics.dailyCalories} />
       </View>
@@ -164,50 +136,17 @@ function NumbersPage({ name, plan }: { name: string; plan: Plan }) {
   );
 }
 
-/** Step 2: the approach. What to focus on and why, with an example day tucked away. */
+/** Step 2: the approach. Why + three habits up front; the summary and a sample day under "More". */
 function PlanPage({ plan }: { plan: Plan }) {
   return (
-    <View className="gap-8">
-      <View>
-        <Heading className="text-2xl">How you’ll get there</Heading>
-        <Text className="mt-3 leading-relaxed">{plan.summary}</Text>
-      </View>
+    <View className="gap-6">
+      <Heading className="text-2xl">How you’ll get there</Heading>
       <WhyCard why={plan.goal.why} />
       <View>
         <SectionTitle>Focus on</SectionTitle>
         <FocusHabits habits={plan.focusHabits} />
       </View>
-      <SampleDay meals={plan.sampleDay} />
-    </View>
-  );
-}
-
-/** Step 3: commitment. Small, measurable actions the user chooses to take on. */
-function ChallengesPage({
-  plan,
-  picked,
-  onToggle,
-}: {
-  plan: Plan;
-  picked: Set<string>;
-  onToggle: (id: string) => void;
-}) {
-  return (
-    <View>
-      <Heading className="text-2xl">Pick your challenges</Heading>
-      <Text className="mb-5 mt-2 text-muted">
-        Start with two or three. You can change these later.
-      </Text>
-      <View className="gap-3">
-        {plan.challenges.map((c) => (
-          <ChallengeRow
-            key={c.id}
-            challenge={c}
-            selected={picked.has(c.id)}
-            onToggle={() => onToggle(c.id)}
-          />
-        ))}
-      </View>
+      <PlanMore summary={plan.summary} meals={plan.sampleDay} />
     </View>
   );
 }

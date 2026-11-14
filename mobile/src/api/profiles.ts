@@ -111,6 +111,26 @@ export function useSetShowAgent() {
   });
 }
 
+/** Opt in or out of reminder pushes (water sips…). */
+export function useSetReminders() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (reminders: { water: boolean }) =>
+      request<Profile>('/me/preferences', { method: 'PUT', body: { reminders } }),
+    onSuccess: (profile) => queryClient.setQueryData(queryKeys.me, profile),
+  });
+}
+
+/** "What's new" for this version was shown: don't show it again until the next one. */
+export function useMarkWhatsNewSeen() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (version: string) =>
+      request<Profile>('/me/preferences', { method: 'PUT', body: { whatsNewSeen: version } }),
+    onSuccess: (profile) => queryClient.setQueryData(queryKeys.me, profile),
+  });
+}
+
 /** The assistant's intro slides were seen (or skipped): never show them again. */
 export function useMarkAssistantIntroSeen() {
   const queryClient = useQueryClient();

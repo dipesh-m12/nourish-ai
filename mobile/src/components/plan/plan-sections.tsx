@@ -15,21 +15,70 @@ export function SectionTitle({ children }: { children: string }) {
   );
 }
 
-/** The three habits that matter most, numbered so they read as priorities. */
+/**
+ * The three habits that matter most, numbered so they read as priorities. Titles only;
+ * tapping one reveals its reason (progressive disclosure keeps the screen short).
+ */
 export function FocusHabits({ habits }: { habits: Plan['focusHabits'] }) {
+  const [open, setOpen] = useState<number | null>(null);
   return (
-    <View className="gap-4 rounded-2xl bg-card p-5">
+    <View className="overflow-hidden rounded-2xl bg-card">
       {habits.map((h, i) => (
-        <View key={h.title} className="flex-row gap-3">
-          <View className="h-7 w-7 items-center justify-center rounded-full bg-primary-soft">
-            <Text className="font-sans-semibold text-sm text-primary-dark">{i + 1}</Text>
+        <Pressable
+          key={h.title}
+          onPress={() => setOpen((o) => (o === i ? null : i))}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: open === i }}
+          accessibilityLabel={`${h.title}. ${open === i ? h.why : 'Show why'}`}
+          className={i > 0 ? 'border-t border-line p-4 active:bg-bg' : 'p-4 active:bg-bg'}
+        >
+          <View className="flex-row items-center gap-3">
+            <View className="h-7 w-7 items-center justify-center rounded-full bg-primary-soft">
+              <Text className="font-sans-semibold text-sm text-primary-dark">{i + 1}</Text>
+            </View>
+            <Text className="flex-1 font-sans-semibold">{h.title}</Text>
+            {open === i ? (
+              <ChevronUp size={18} color={colors.muted} />
+            ) : (
+              <ChevronDown size={18} color={colors.muted} />
+            )}
           </View>
-          <View className="flex-1">
-            <Text className="font-sans-semibold">{h.title}</Text>
-            <Text className="mt-0.5 text-sm text-muted">{h.why}</Text>
-          </View>
-        </View>
+          {open === i && (
+            <Animated.View entering={FadeIn.duration(200)}>
+              <Text className="ml-10 mt-1 text-sm text-muted">{h.why}</Text>
+            </Animated.View>
+          )}
+        </Pressable>
       ))}
+    </View>
+  );
+}
+
+/** Collapsed extras under one "More" row: the plan summary and an example day of meals. */
+export function PlanMore({ summary, meals }: { summary: string; meals: Plan['sampleDay'] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <View>
+      <Pressable
+        onPress={() => setOpen((o) => !o)}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        accessibilityLabel={open ? 'Show less' : 'More about your plan'}
+        className="flex-row items-center justify-center gap-1 py-2"
+      >
+        <Text className="font-sans-semibold text-sm text-primary">{open ? 'Less' : 'More'}</Text>
+        {open ? (
+          <ChevronUp size={16} color={colors.primary} />
+        ) : (
+          <ChevronDown size={16} color={colors.primary} />
+        )}
+      </Pressable>
+      {open && (
+        <Animated.View entering={FadeIn.duration(200)} className="mt-2 gap-4">
+          <Text className="leading-relaxed text-muted">{summary}</Text>
+          <SampleDay meals={meals} />
+        </Animated.View>
+      )}
     </View>
   );
 }

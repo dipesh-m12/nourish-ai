@@ -44,7 +44,7 @@ export default function GoalStep() {
   return (
     <StepScreen
       title="What do you want to achieve?"
-      subtitle="Pick the one that matters most right now. You can change it later."
+      subtitle="Pick one. You can change it later."
       canContinue={canContinue}
       onContinue={() => {
         update({ targetWeightKg: needsTarget && target ? Math.round(target * 10) / 10 : null });

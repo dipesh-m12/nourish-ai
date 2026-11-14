@@ -14,7 +14,7 @@ export default function AboutStep() {
   return (
     <StepScreen
       title="Let’s get to know you"
-      subtitle="Your body and age shape how much energy you burn each day."
+      subtitle="This shapes how much energy you burn."
       canContinue={Boolean(draft.sex)}
       onContinue={goNext}
     >

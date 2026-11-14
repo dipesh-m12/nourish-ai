@@ -21,6 +21,10 @@ export interface ProfileSummary {
   preferences: {
     /** Saw the assistant's how-it-works slides. */
     assistantIntroSeen?: boolean;
+    /** Reminder consent by kind. Missing = not asked yet. */
+    reminders?: { water?: boolean };
+    /** Last version whose "What's new" was shown. */
+    whatsNewSeen?: string;
   };
   onboarded: boolean;
 }

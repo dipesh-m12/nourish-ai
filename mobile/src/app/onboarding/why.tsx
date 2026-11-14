@@ -21,7 +21,7 @@ export default function WhyStep() {
   return (
     <StepScreen
       title="Why does this matter to you?"
-      subtitle="In your own words. We'll remind you of this on the hard days."
+      subtitle="In your own words. We'll remind you on hard days."
       continueLabel="Build my plan"
       canContinue={draft.why.trim().length >= MIN_LENGTH}
       onContinue={goNext}

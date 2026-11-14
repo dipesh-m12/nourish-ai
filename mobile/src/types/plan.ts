@@ -13,6 +13,22 @@ export interface Challenge {
   frequency: ChallengeFrequency;
   category: ChallengeCategory;
   accepted: boolean;
+  endsOn: string | null;
+  /** 'plan' = suggested at onboarding, 'user' = asked for. */
+  source: 'plan' | 'user';
+}
+
+/** One AI proposal from "What do you want to achieve?" (not saved yet). */
+export interface ChallengeProposal {
+  title: string;
+  target: string;
+  /** How it will feel, not a number. */
+  why: string;
+  frequency: ChallengeFrequency;
+  category: ChallengeCategory;
+  endsOn: string | null;
+  /** The user didn't say how long: the app asks. */
+  ask: boolean;
 }
 
 export interface Plan {

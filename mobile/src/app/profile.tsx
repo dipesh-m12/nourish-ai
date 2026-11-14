@@ -1,6 +1,7 @@
 import Constants from 'expo-constants';
 import { type Href, Redirect, router } from 'expo-router';
 import {
+  Bell,
   ChevronLeft,
   ChevronRight,
   Compass,
@@ -10,12 +11,12 @@ import {
   type LucideIcon,
   PawPrint,
   Sparkles,
+  UserRound,
 } from 'lucide-react-native';
 import { Children, type ReactNode, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Switch, View } from 'react-native';
 import Animated, { FadeInDown, ZoomIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { usePlan } from '@/api/plan';
 import { useSubscription } from '@/api/subscription';
 import { useToday } from '@/api/today';
 import type { SubscriptionSummary } from '@/types/subscription';
@@ -24,11 +25,13 @@ import { localDate } from '@/utils/date';
 import { useDeleteAccount, useMe, useSetShowAgent } from '@/api/profiles';
 import { AvatarSheet } from '@/components/avatar-sheet';
 import { FeedbackSheet } from '@/components/feedback-sheet';
+import { RemindersSheet } from '@/components/challenges/reminders-sheet';
 import { ProfileAvatar } from '@/components/profile-avatar';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Heading, Text } from '@/components/ui/text';
 import { colors } from '@/constants/colors';
-import { ACTIVITY_OPTIONS, DIET_OPTIONS, GOAL_OPTIONS, SEX_OPTIONS } from '@/constants/onboarding';
+import { GOAL_OPTIONS } from '@/constants/onboarding';
+import { DetailsSheet } from '@/components/profile/details-sheet';
 import { cn } from '@/lib/cn';
 import { useSession } from '@/store/session';
 import { useToast } from '@/store/toast';
@@ -38,7 +41,7 @@ type Pending = 'logout' | 'delete' | null;
 /** Developer section (404 preview). Off for the demo; set true to bring it back in dev builds. */
 const SHOW_DEV_TOOLS = false as boolean;
 
-const labelOf =<T extends string>(options: { value: T; label: string }[], value: T | null) =>
+const labelOf = <T extends string>(options: { value: T; label: string }[], value: T | null) =>
   options.find((o) => o.value === value)?.label ?? '—';
 
 /** Leaves the signed-in area entirely and lands on the profile picker with a fresh stack. */
@@ -49,7 +52,6 @@ function goToPicker() {
 
 export default function ProfileScreen() {
   const { data: profile, isPending } = useMe();
-  const { data: plan } = usePlan(Boolean(profile?.onboarded));
   const signOut = useSession((s) => s.signOut);
   const deleteAccount = useDeleteAccount();
   const toast = useToast((s) => s.show);
@@ -63,6 +65,8 @@ export default function ProfileScreen() {
   // Set while we deliberately leave, so the unexpected-sign-out redirect below doesn't race us.
   const [leaving, setLeaving] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [remindersOpen, setRemindersOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   const logOut = async () => {
     setLeaving(true);
@@ -95,8 +99,6 @@ export default function ProfileScreen() {
       </View>
     );
   }
-
-  const accepted = plan?.challenges.filter((c) => c.accepted) ?? [];
 
   return (
     <SafeAreaView className="flex-1 bg-bg">
@@ -138,44 +140,19 @@ export default function ProfileScreen() {
             <Heading className="mt-4 text-center">{profile.name}</Heading>
             {profile.goal && (
               <Text className="mt-1 text-center text-muted">
-                {labelOf(GOAL_OPTIONS, profile.goal.type)} · {profile.goal.dailyCalories} kcal a day
+                {labelOf(GOAL_OPTIONS, profile.goal.type)} · {profile.goal.dailyCalories} kcal
               </Text>
             )}
           </Animated.View>
         </View>
 
-        <Section title="About you" delay={140}>
-          <Row label="Sex" value={labelOf(SEX_OPTIONS, profile.sex)} />
-          <Row label="Age" value={profile.age ? `${profile.age} years` : '—'} />
-          <Row label="Height" value={profile.heightCm ? `${profile.heightCm} cm` : '—'} />
-          <Row label="Weight" value={profile.weightKg ? `${profile.weightKg} kg` : '—'} />
-          <Row label="Activity" value={labelOf(ACTIVITY_OPTIONS, profile.activityLevel)} />
-          <Row label="Diet" value={labelOf(DIET_OPTIONS, profile.dietType)} />
-          <Row
-            label="Allergies"
-            value={profile.allergies.length ? profile.allergies.join(', ') : 'None'}
+        <Section delay={140}>
+          <ActionRow
+            icon={UserRound}
+            label="Your details"
+            hint="Body, diet, goal"
+            onPress={() => setDetailsOpen(true)}
           />
-        </Section>
-
-        {profile.goal && (
-          <Section title="Your goal" delay={200}>
-            <Row label="Goal" value={labelOf(GOAL_OPTIONS, profile.goal.type)} />
-            {profile.goal.targetWeightKg != null && (
-              <Row label="Target weight" value={`${profile.goal.targetWeightKg} kg`} />
-            )}
-            <Row label="Why" value={profile.goal.why} multiline />
-          </Section>
-        )}
-
-        <Section title="Challenges you took on" delay={260}>
-          {accepted.length ? (
-            accepted.map((c) => <Row key={c.id} label={c.title} value={c.target} />)
-          ) : (
-            <Row label="None yet" value="" />
-          )}
-        </Section>
-
-        <Section title="Plan" delay={260}>
           <Pressable
             onPress={() => router.push('/club')}
             accessibilityRole="button"
@@ -184,16 +161,15 @@ export default function ProfileScreen() {
           >
             <Sparkles size={20} color={billing?.premium ? colors.primary : colors.ink} />
             <View className="flex-1">
-              <Text className="font-sans-medium">{billing?.premium ? 'Mochi’s Club' : 'Free'}</Text>
+              <Text className="font-sans-medium">
+                {billing?.premium ? 'Mochi’s Club' : 'Free plan'}
+              </Text>
               <Text className="text-sm text-muted" numberOfLines={1}>
                 {planLine(billing)}
               </Text>
             </View>
             <ChevronRight size={18} color={colors.muted} />
           </Pressable>
-        </Section>
-
-        <Section title="Companion" delay={270}>
           {companion?.status === 'adopted' || companion?.status === 'left' ? (
             <Pressable
               onPress={() => router.push('/adopt')}
@@ -201,13 +177,8 @@ export default function ProfileScreen() {
               accessibilityLabel={`${companion.name}: ${companion.line ?? ''}`}
               className="flex-row items-center gap-3 px-4 py-3 active:bg-bg"
             >
-              <CatFace mood={companion.mood ?? 'normal'} size={40} />
-              <View className="flex-1">
-                <Text className="font-sans-medium">{companion.name}</Text>
-                <Text className="text-sm text-muted" numberOfLines={1}>
-                  {companion.line}
-                </Text>
-              </View>
+              <CatFace mood={companion.mood ?? 'normal'} size={36} />
+              <Text className="flex-1 font-sans-medium">{companion.name}</Text>
               <ChevronRight size={18} color={colors.muted} />
             </Pressable>
           ) : (
@@ -215,9 +186,9 @@ export default function ProfileScreen() {
           )}
         </Section>
 
-        <Section title="Assistant" delay={280}>
+        <Section title="Settings" delay={220}>
           <ToggleRow
-            label="Show Nourish on my dashboard"
+            label="Nourish on dashboard"
             // Always the saved value: the switch only moves once the server confirms.
             value={Boolean(profile.showAgent)}
             busy={setShowAgent.isPending}
@@ -228,17 +199,15 @@ export default function ProfileScreen() {
               })
             }
           />
-        </Section>
-
-        <Section title="Help" delay={300}>
+          <ActionRow icon={Bell} label="Reminders" onPress={() => setRemindersOpen(true)} />
           <ActionRow
             icon={MessageSquareWarning}
-            label="Report an issue or send feedback"
+            label="Send feedback"
             onPress={() => setFeedbackOpen(true)}
           />
         </Section>
 
-        <Section title="Account" delay={340}>
+        <Section delay={300}>
           <ActionRow icon={LogOut} label="Log out" onPress={() => setPending('logout')} />
           <ActionRow
             icon={Trash2}
@@ -259,12 +228,26 @@ export default function ProfileScreen() {
           </Section>
         )}
 
-        <Text className="mt-10 text-center text-xs text-muted">
-          Nourish AI · v{Constants.expoConfig?.version ?? '1.0.0'}
-        </Text>
+        <Pressable
+          onPress={() => router.push('/whats-new')}
+          accessibilityRole="button"
+          accessibilityLabel="What's new in this version"
+          className="mt-10 self-center py-2"
+        >
+          <Text className="text-center text-xs text-muted">
+            Nourish AI · v{Constants.expoConfig?.version ?? '1.0.0'} ·{' '}
+            <Text className="text-xs text-primary">What’s new</Text>
+          </Text>
+        </Pressable>
       </ScrollView>
 
+      <DetailsSheet visible={detailsOpen} profile={profile} onClose={() => setDetailsOpen(false)} />
       <FeedbackSheet visible={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
+      <RemindersSheet
+        visible={remindersOpen}
+        date={localDate()}
+        onClose={() => setRemindersOpen(false)}
+      />
       <AvatarSheet visible={avatarOpen} profile={profile} onClose={() => setAvatarOpen(false)} />
       <ConfirmDialog
         visible={pending === 'logout'}
@@ -302,7 +285,7 @@ function planLine(s?: SubscriptionSummary) {
       ? `Renews ${date(s.current.nextBillAt)}`
       : `Autopay off · until ${date(s.current.nextBillAt)}`;
   }
-  return 'Join Mochi’s Club for unlimited Nourish';
+  return 'Unlimited Nourish in Mochi’s Club';
 }
 
 function Section({
@@ -310,15 +293,17 @@ function Section({
   delay,
   children,
 }: {
-  title: string;
+  title?: string;
   delay: number;
   children: ReactNode;
 }) {
   return (
     <Animated.View entering={FadeInDown.delay(delay).duration(350)} className="mb-6">
-      <Text className="mb-2 px-1 font-sans-semibold text-sm uppercase tracking-wider text-muted">
-        {title}
-      </Text>
+      {title && (
+        <Text className="mb-2 px-1 font-sans-semibold text-sm uppercase tracking-wider text-muted">
+          {title}
+        </Text>
+      )}
       {/* Grouped list: one card, rows divided by hairlines (settings pattern). */}
       <View className="overflow-hidden rounded-2xl bg-card">
         {Children.toArray(children).map((child, i) => (
@@ -329,24 +314,6 @@ function Section({
         ))}
       </View>
     </Animated.View>
-  );
-}
-
-function Row({ label, value, multiline }: { label: string; value: string; multiline?: boolean }) {
-  return (
-    <View
-      className={cn(
-        'px-4 py-3.5',
-        multiline ? 'gap-1' : 'flex-row items-center justify-between gap-4',
-      )}
-    >
-      <Text className={cn(multiline && 'text-sm text-muted')}>{label}</Text>
-      {!!value && (
-        <Text className={cn(multiline ? 'leading-relaxed' : 'flex-shrink text-right text-muted')}>
-          {value}
-        </Text>
-      )}
-    </View>
   );
 }
 
@@ -383,11 +350,13 @@ function ToggleRow({
 function ActionRow({
   icon: Icon,
   label,
+  hint,
   destructive,
   onPress,
 }: {
   icon: LucideIcon;
   label: string;
+  hint?: string;
   destructive?: boolean;
   onPress: () => void;
 }) {
@@ -400,7 +369,10 @@ function ActionRow({
       className="flex-row items-center gap-3 px-4 py-4 active:bg-bg"
     >
       <Icon size={20} color={tint} />
-      <Text className={cn('flex-1 font-sans-medium', destructive && 'text-danger')}>{label}</Text>
+      <View className="flex-1">
+        <Text className={cn('font-sans-medium', destructive && 'text-danger')}>{label}</Text>
+        {hint && <Text className="text-sm text-muted">{hint}</Text>}
+      </View>
       {!destructive && <ChevronRight size={18} color={colors.muted} />}
     </Pressable>
   );
