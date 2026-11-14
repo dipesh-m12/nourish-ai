@@ -16,6 +16,7 @@ import {
 export class GroqProvider implements LlmProvider {
   readonly name = 'groq';
   readonly fast = true;
+  readonly supportsPdf = false;
 
   constructor(
     private readonly apiKey: string,

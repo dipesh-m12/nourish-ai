@@ -45,3 +45,6 @@ export function looksLikeAudio(bytes: Buffer, mimeType: string): boolean {
       return false;
   }
 }
+
+/** Text to speak in voice mode (assistant replies are short). */
+export const speakSchema = z.object({ text: z.string().trim().min(1).max(600) });

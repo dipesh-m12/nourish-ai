@@ -5,6 +5,8 @@ import { GroqProvider } from './groq.provider';
 import type { ImageInput, LlmProvider } from './llm-provider';
 
 const TIMEOUT_MS = 15_000;
+/** Per model: Gemini on a PDF answers in 7–40 s; 20 s each, then the lighter model (≤ 40 s total). */
+const PDF_TIMEOUT_MS = 20_000;
 
 /** Providers in priority order. Only those with a key configured are used. */
 const providers: LlmProvider[] = [];
@@ -56,11 +58,14 @@ export async function generateStructured<S extends z.ZodType>(
   prompt: { system: string; user: string; images?: ImageInput[] },
   check?: (data: z.output<S>) => string | null,
   /** fast: small asks the user is waiting on (e.g. one typed food) try fast providers first. */
-  options: { fast?: boolean } = {},
+  options: { fast?: boolean; timeoutMs?: number } = {},
 ): Promise<StructuredResult<z.output<S>>> {
   const jsonSchema = toProviderSchema(schema);
   const failures: string[] = [];
   const needsVision = Boolean(prompt.images?.length);
+  const needsPdf = Boolean(prompt.images?.some((i) => i.mimeType === 'application/pdf'));
+  // Reading a PDF takes Gemini longer than the usual budget; the app waits up to 45 s.
+  const timeoutMs = options.timeoutMs ?? (needsPdf ? PDF_TIMEOUT_MS : TIMEOUT_MS);
 
   const order = options.fast
     ? [...providers.filter((p) => p.fast), ...providers.filter((p) => !p.fast)]
@@ -68,11 +73,12 @@ export async function generateStructured<S extends z.ZodType>(
 
   for (const provider of order) {
     if (needsVision && !provider.supportsImages) continue;
+    if (needsPdf && !provider.supportsPdf) continue;
     try {
       const { text, model } = await provider.generateJson({
         ...prompt,
         jsonSchema,
-        timeoutMs: TIMEOUT_MS,
+        timeoutMs,
       });
       const parsed = schema.safeParse(extractJson(text));
       if (!parsed.success) {

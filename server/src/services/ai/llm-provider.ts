@@ -31,6 +31,8 @@ export interface LlmProvider {
   readonly model: string;
   /** Providers that can't see images are skipped for requests that include them. */
   readonly supportsImages: boolean;
+  /** Reads PDF documents (lab reports). Requests with a PDF skip providers that can't. */
+  readonly supportsPdf: boolean;
   /** Answers in ~2–3 s (vs ~6–9 s). Quick, simple asks try fast providers first. */
   readonly fast: boolean;
   generateJson(req: JsonRequest): Promise<JsonResponse>;

@@ -1,4 +1,5 @@
 import type { Request, Response } from 'express';
+import { speak } from '../services/ai/speech.service';
 import { transcribe } from '../services/ai/transcription.service';
 import { AppError } from '../utils/app-error';
 import { looksLikeAudio, type AudioInput } from '../validators/audio.validator';
@@ -18,5 +19,10 @@ export const voiceController = {
       throw new AppError(502, 'We couldn’t hear that right now. Please try again, or type it.');
     }
     res.json({ text });
+  },
+
+  /** Voice mode: the assistant's reply as audio (WAV). 503 → the app uses the phone's voice. */
+  async speak(req: Request, res: Response) {
+    res.json(await speak(req.body.text));
   },
 };

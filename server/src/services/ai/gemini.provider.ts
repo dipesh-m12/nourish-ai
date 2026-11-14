@@ -17,6 +17,7 @@ const isWorthTryingNextModel = (status: number) => status !== 401 && status !== 
 export class GeminiProvider implements LlmProvider {
   readonly name = 'gemini';
   readonly supportsImages = true;
+  readonly supportsPdf = true;
   readonly fast = false;
 
   constructor(
@@ -34,6 +35,11 @@ export class GeminiProvider implements LlmProvider {
       try {
         return { text: await this.call(model, req), model };
       } catch (err) {
+        // A timeout on one model: the next (lighter) one often answers in time, so try it.
+        if (err instanceof Error && err.name === 'AbortError') {
+          lastError = new ProviderError(`${this.name}/${model}`, 'timed out');
+          continue;
+        }
         if (!(err instanceof ProviderError)) throw err;
         lastError = err;
         if (err.status !== undefined && !isWorthTryingNextModel(err.status)) throw err;
