@@ -4,6 +4,7 @@ import { activities, goals, meals, profiles } from '../../db/schema';
 import { AppError } from '../../utils/app-error';
 import { addDays, lastNDays } from '../../utils/dates';
 import { challengeProgressService } from '../challenges/challenge-progress.service';
+import { signalsService } from '../priorities/signals.service';
 import { buildWeek, type WeekTotals } from './week.rules';
 
 type Day = { kcal: number; protein: number; activeMin: number; sleepMin: number };
@@ -46,7 +47,7 @@ export const weekService = {
   /** This week (the 7 days ending today) against the 7 before, for the check-in screen. */
   async review(profileId: string, date: string, tz: number) {
     const from = addDays(date, -13);
-    const [profile, goal, mealRows, activityRows, today] = await Promise.all([
+    const [profile, goal, mealRows, activityRows, today, reports] = await Promise.all([
       db.query.profiles.findFirst({ where: eq(profiles.id, profileId), columns: { name: true } }),
       db.query.goals.findFirst({ where: eq(goals.profileId, profileId) }),
       db
@@ -81,6 +82,7 @@ export const weekService = {
         )
         .groupBy(activities.localDate),
       challengeProgressService.today(profileId, date, tz),
+      signalsService.markers(profileId),
     ]);
     if (!profile || !goal) throw AppError.notFound('Profile');
 
@@ -106,12 +108,16 @@ export const weekService = {
         };
       });
 
-    return buildWeek({
-      name: profile.name,
-      targets: { calories: goal.dailyCalories, proteinG: goal.proteinG },
-      thisWeek: totals(thisDays, byDay, today.challenges),
-      lastWeek: totals(lastDays, byDay, today.challenges),
-      habits,
-    });
+    return {
+      ...buildWeek({
+        name: profile.name,
+        targets: { calories: goal.dailyCalories, proteinG: goal.proteinG },
+        thisWeek: totals(thisDays, byDay, today.challenges),
+        lastWeek: totals(lastDays, byDay, today.challenges),
+        habits,
+      }),
+      // Their reports, area by area: the slow answer to "is my health improving?".
+      reports,
+    };
   },
 };

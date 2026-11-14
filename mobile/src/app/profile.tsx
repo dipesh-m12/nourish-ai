@@ -11,6 +11,7 @@ import {
   type LucideIcon,
   PawPrint,
   Sparkles,
+  Sprout,
   UserRound,
 } from 'lucide-react-native';
 import { Children, type ReactNode, useState } from 'react';
@@ -152,6 +153,12 @@ export default function ProfileScreen() {
             label="Your details"
             hint="Body, diet, goal"
             onPress={() => setDetailsOpen(true)}
+          />
+          <ActionRow
+            icon={Sprout}
+            label="Your week"
+            hint="Progress and reports"
+            onPress={() => router.push('/week')}
           />
           <Pressable
             onPress={() => router.push('/club')}

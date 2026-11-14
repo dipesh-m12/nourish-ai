@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import { ArrowDown, ArrowUp, ChevronLeft, Minus } from 'lucide-react-native';
+import { ArrowDown, ArrowUp, Check, ChevronLeft, Minus } from 'lucide-react-native';
 import { Pressable, ScrollView, View } from 'react-native';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { SkeletonBlock, SkeletonGroup } from '@/components/ui/skeleton';
 import { Heading, Text } from '@/components/ui/text';
 import { colors } from '@/constants/colors';
-import type { WeekReview, WeekStat } from '@/types/week';
+import type { MarkerFlag, MarkerTrend, WeekReview, WeekStat } from '@/types/week';
 import { localDate } from '@/utils/date';
 
 const ART: Record<WeekReview['trend'], number> = {
@@ -21,7 +21,8 @@ const ART: Record<WeekReview['trend'], number> = {
 
 /**
  * "Is my health improving?" in one screen: a plant for the week, one line, three numbers
- * against last week (arrow + colour, never colour alone), the best habit, and one fix.
+ * against last week (arrow + colour, never colour alone), the best habit, one fix, and their
+ * reports area by area (the slow answer: did iron come back into range?).
  */
 export default function WeekScreen() {
   const week = useWeek(localDate());
@@ -103,6 +104,19 @@ export default function WeekScreen() {
                 />
               </Animated.View>
             )}
+
+            {w.reports.length > 0 && (
+              <Animated.View entering={enter(4)} className="mt-8">
+                <Text className="mb-3 font-sans-semibold text-sm uppercase tracking-wider text-muted">
+                  From your reports
+                </Text>
+                <View className="overflow-hidden rounded-3xl bg-card">
+                  {w.reports.map((m, i) => (
+                    <MarkerRow key={m.area} marker={m} first={i === 0} />
+                  ))}
+                </View>
+              </Animated.View>
+            )}
           </>
         )}
       </ScrollView>
@@ -130,6 +144,42 @@ function StatRow({ stat: s, first }: { stat: WeekStat; first: boolean }) {
         ) : (
           <Minus size={14} color={colors.line} />
         )}
+      </View>
+    </View>
+  );
+}
+
+const FLAG: Record<MarkerFlag, string> = { low: 'Low', high: 'High', normal: 'Normal' };
+
+/** One area: what it's for, then where it stands (and where it was, when that changed). */
+function MarkerRow({ marker: m, first }: { marker: MarkerTrend; first: boolean }) {
+  const ok = m.now === 'normal';
+  const changed = m.before !== null && m.before !== m.now;
+  return (
+    <View
+      className={`flex-row items-center px-4 py-3.5 ${first ? '' : 'border-t border-line'}`}
+      accessible
+      accessibilityLabel={`${m.label}, for ${m.feel}: ${FLAG[m.now]}${
+        changed ? `, was ${FLAG[m.before!]}` : ''
+      }`}
+    >
+      <View className="flex-1">
+        <Text className="font-sans-semibold">{m.label}</Text>
+        <Text className="text-xs text-muted">for {m.feel}</Text>
+      </View>
+      {changed && <Text className="mr-2 text-sm text-muted">{FLAG[m.before!]} →</Text>}
+      <View
+        className={`h-7 flex-row items-center gap-1 rounded-full px-2.5 ${
+          ok ? 'bg-primary-soft' : 'bg-accent-soft'
+        }`}
+      >
+        {m.trend === 'better' && <Check size={13} color={colors.primary} strokeWidth={3} />}
+        <Text
+          className="font-sans-semibold text-xs"
+          style={{ color: ok ? colors.primary : colors.accentText }}
+        >
+          {FLAG[m.now]}
+        </Text>
       </View>
     </View>
   );

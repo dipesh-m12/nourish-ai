@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import type { ReportFinding } from '../src/db/schema';
-import { prioritiesFrom, priorityTip } from '../src/services/priorities/priorities.rules';
+import {
+  markerTrends,
+  prioritiesFrom,
+  priorityTip,
+} from '../src/services/priorities/priorities.rules';
 
 const DAY = 86_400_000;
 const NOW = Date.UTC(2026, 10, 15, 12);
@@ -80,5 +84,41 @@ describe('the report-led tip', () => {
     const tip = priorityTip({ ...base, hour: 13, findings: [b12], allergies: ['dairy'] });
     // Every veg B12 food is dairy: no safe suggestion means no tip, not a wrong one.
     assert.equal(tip, null);
+  });
+});
+
+describe('report markers over time', () => {
+  const ironOk: ReportFinding = { ...ironLow, value: '42', flag: 'normal' };
+
+  it('a newer in-range report ends the priority', () => {
+    const p = prioritiesFrom(
+      [
+        { focus: null, findings: [ironLow], at: NOW - 60 * DAY },
+        { focus: null, findings: [ironOk], at: NOW - 1 * DAY },
+      ],
+      NOW,
+    );
+    assert.deepEqual(p.findings, []);
+  });
+
+  it('shows back-in-range as better, a first report as new, and skips untested areas', () => {
+    const rows = markerTrends([
+      { focus: null, findings: [ironLow, sugarHigh], at: NOW - 60 * DAY },
+      { focus: null, findings: [ironOk], at: NOW - 1 * DAY },
+      { focus: 'tired', findings: [], at: NOW },
+    ]);
+    assert.deepEqual(
+      rows.map((r) => [r.area, r.before, r.now, r.trend]),
+      [
+        ['iron', 'low', 'normal', 'better'],
+        ['sugar', null, 'high', 'new'],
+      ],
+    );
+  });
+
+  it('an out-of-range marker wins over an in-range one from the same report', () => {
+    const hb: ReportFinding = { ...ironOk, marker: 'Haemoglobin' };
+    const [row] = markerTrends([{ focus: null, findings: [hb, ironLow], at: NOW }]);
+    assert.equal(row!.now, 'low');
   });
 });

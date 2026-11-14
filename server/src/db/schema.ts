@@ -602,22 +602,16 @@ export const sessions = pgTable(
  * What the user has told Nourish they care about, so the PA (the briefing card, nudges, chat)
  * can follow their priorities instead of guessing. One row per "+" ask, report or photo.
  * `focus` is the problem in a few words ("low iron", "knee pain on stairs"); `findings` are the
- * abnormal markers the AI read off a report (normal ones aren't stored).
+ * markers the AI read off a report: every abnormal one, plus the main in-range marker per area
+ * (flag `normal`), so a later report can show that something got better.
  */
 export type FindingArea =
-  | 'iron'
-  | 'vitamin_d'
-  | 'b12'
-  | 'sugar'
-  | 'cholesterol'
-  | 'triglycerides'
-  | 'thyroid'
-  | 'other';
+  'iron' | 'vitamin_d' | 'b12' | 'sugar' | 'cholesterol' | 'triglycerides' | 'thyroid' | 'other';
 export interface ReportFinding {
   marker: string;
   value: string;
   unit: string;
-  flag: 'low' | 'high';
+  flag: 'low' | 'high' | 'normal';
   area: FindingArea;
 }
 

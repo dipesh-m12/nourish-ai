@@ -39,7 +39,59 @@ export function prioritiesFrom(signals: Signal[], now: number): Priorities {
     if (now - s.at > FINDING_DAYS * DAY_MS) continue;
     for (const f of s.findings) if (!byArea.has(f.area)) byArea.set(f.area, f);
   }
-  return { focuses, findings: [...byArea.values()] };
+  // A newer report that's back in range ends that priority (no more iron tips once it's fine).
+  return { focuses, findings: [...byArea.values()].filter((f) => f.flag !== 'normal') };
+}
+
+/** Areas worth a row, in the order people care about, each said as what it's for ("for energy"). */
+const AREAS: { area: FindingArea; label: string; feel: string }[] = [
+  { area: 'iron', label: 'Iron', feel: 'energy' },
+  { area: 'vitamin_d', label: 'Vitamin D', feel: 'energy and mood' },
+  { area: 'b12', label: 'B12', feel: 'focus' },
+  { area: 'sugar', label: 'Sugar', feel: 'steady energy after meals' },
+  { area: 'cholesterol', label: 'Cholesterol', feel: 'your heart' },
+  { area: 'triglycerides', label: 'Triglycerides', feel: 'your heart' },
+  { area: 'thyroid', label: 'Thyroid', feel: 'energy and weight' },
+];
+
+export interface MarkerTrend {
+  area: FindingArea;
+  label: string;
+  feel: string;
+  now: ReportFinding['flag'];
+  /** The report before, if it measured this area too. */
+  before: ReportFinding['flag'] | null;
+  trend: 'better' | 'worse' | 'same' | 'new';
+}
+
+/**
+ * "Is my health improving?" from their own reports: per area, the latest report against the
+ * one before it. Back in range = better; out of range again = worse. Pure.
+ */
+export function markerTrends(signals: Signal[]): MarkerTrend[] {
+  const reports = signals.filter((s) => s.findings.length).sort((a, b) => b.at - a.at);
+  const rows: MarkerTrend[] = [];
+  for (const { area, label, feel } of AREAS) {
+    // Per report, an out-of-range marker in the area wins over an in-range one.
+    const seen = reports.flatMap(
+      (r) =>
+        r.findings.find((f) => f.area === area && f.flag !== 'normal') ??
+        r.findings.find((f) => f.area === area) ??
+        [],
+    );
+    const [latest, previous] = seen;
+    if (!latest) continue;
+    const before = previous?.flag ?? null;
+    const trend: MarkerTrend['trend'] = !before
+      ? 'new'
+      : before === latest.flag
+        ? 'same'
+        : latest.flag === 'normal'
+          ? 'better'
+          : 'worse';
+    rows.push({ area, label, feel, now: latest.flag, before, trend });
+  }
+  return rows;
 }
 
 /** Foods that help each low marker, per diet (Indian home food first). */
@@ -79,7 +131,7 @@ export interface PriorityInput {
 
 export interface PriorityTip {
   area: FindingArea;
-  /** The advice, short, with the marker named so it's clearly about their report. */
+  /** Feeling first, then the food or habit, then the marker (so it's clearly about their report). */
   headline: string;
   /** What it does for them, felt not measured. */
   feel: string;
@@ -111,7 +163,7 @@ export function priorityTip(i: PriorityInput): PriorityTip | null {
     if (foods.length)
       return {
         area: 'iron',
-        headline: `Iron was low on your report. Add ${foods.join(' or ')} to your next meal, with a squeeze of lemon.`,
+        headline: `For more energy, add ${foods.join(' or ')} to your next meal, with a squeeze of lemon. Your report showed low iron.`,
         feel: 'less tired on the stairs',
         action: 'log_meal',
       };
@@ -123,7 +175,7 @@ export function priorityTip(i: PriorityInput): PriorityTip | null {
     if (foods.length)
       return {
         area: 'b12',
-        headline: `B12 was low on your report. Have ${foods.join(' or ')} today.`,
+        headline: `For steadier energy and focus, have ${foods.join(' or ')} today. Your report showed low B12.`,
         feel: 'steadier energy and focus',
         action: 'log_meal',
       };
@@ -132,7 +184,8 @@ export function priorityTip(i: PriorityInput): PriorityTip | null {
   if (low('vitamin_d') && i.hour >= 7 && i.hour < 11)
     return {
       area: 'vitamin_d',
-      headline: 'Vitamin D was low on your report. Fifteen minutes of morning sun now.',
+      headline:
+        'For more energy all day, get fifteen minutes of morning sun now. Your report showed low vitamin D.',
       feel: 'more energy through the day',
       action: 'ask',
       prompt: 'Add a 15 minute morning sunlight walk to my challenges',
@@ -141,7 +194,8 @@ export function priorityTip(i: PriorityInput): PriorityTip | null {
   if (high('sugar') && i.hour >= 19 && i.hour < 23)
     return {
       area: 'sugar',
-      headline: 'Sugar was high on your report. A ten-minute walk after dinner helps most.',
+      headline:
+        'To skip the sleepy slump, take a ten-minute walk after dinner. Your report showed high sugar.',
       feel: 'no heavy, sleepy feeling after meals',
       action: 'ask',
       prompt: 'Log a 10 minute walk after dinner',
@@ -151,7 +205,7 @@ export function priorityTip(i: PriorityInput): PriorityTip | null {
     return {
       area: high('cholesterol') ? 'cholesterol' : 'triglycerides',
       headline:
-        'Something fried today. Keep the next meal light and not fried, for your cholesterol.',
+        'Something fried today. Keep the next meal light and you will feel lighter. Kind to your cholesterol too.',
       feel: 'lighter after meals',
       action: 'log_meal',
     };

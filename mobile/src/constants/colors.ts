@@ -10,6 +10,8 @@ export const colors = {
   primarySoft: '#E6F2EB',
   accent: '#E07A5F',
   accentSoft: '#FBEDE8',
+  /** Coral dark enough for text on accentSoft (4.9:1). */
+  accentText: '#B04532',
   danger: '#B42318',
   mustard: '#D99A2B',
   sleep: '#6A8D73',

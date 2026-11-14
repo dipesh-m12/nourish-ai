@@ -1,7 +1,7 @@
-import { and, desc, eq, gte } from 'drizzle-orm';
+import { and, desc, eq, gte, sql } from 'drizzle-orm';
 import { db } from '../../db';
 import { userSignals, type ReportFinding } from '../../db/schema';
-import { prioritiesFrom, type Priorities } from './priorities.rules';
+import { markerTrends, prioritiesFrom, type Priorities } from './priorities.rules';
 
 /** Older rows never matter: the longest window in priorities.rules is 120 days. */
 const LOOKBACK_DAYS = 120;
@@ -55,6 +55,25 @@ export const signalsService = {
     return prioritiesFrom(
       rows.map((r) => ({ focus: r.focus, findings: r.findings, at: r.createdAt.getTime() })),
       now.getTime(),
+    );
+  },
+
+  /** Each health area from their reports (last year), latest against the one before. */
+  async markers(profileId: string, now = new Date()) {
+    const rows = await db
+      .select({ findings: userSignals.findings, createdAt: userSignals.createdAt })
+      .from(userSignals)
+      .where(
+        and(
+          eq(userSignals.profileId, profileId),
+          gte(userSignals.createdAt, new Date(now.getTime() - 365 * 86_400_000)),
+          sql`jsonb_array_length(${userSignals.findings}) > 0`,
+        ),
+      )
+      .orderBy(desc(userSignals.createdAt))
+      .limit(20);
+    return markerTrends(
+      rows.map((r) => ({ focus: null, findings: r.findings, at: r.createdAt.getTime() })),
     );
   },
 };

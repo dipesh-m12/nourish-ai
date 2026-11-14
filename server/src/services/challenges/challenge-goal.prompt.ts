@@ -9,14 +9,14 @@ export const goalProposalSchema = z.strictObject({
   reply: z.string().min(1).max(200),
   /** The problem they care about, in a few words ("low iron", "knee pain on stairs"). */
   focus: z.string().max(60),
-  /** Abnormal markers read off a report or lab photo; empty for words alone. */
+  /** Markers read off a report or lab photo (abnormal + the main in-range one per area). */
   findings: z
     .array(
       z.strictObject({
         marker: z.string().max(60),
         value: z.string().max(20),
         unit: z.string().max(20),
-        flag: z.enum(['low', 'high']),
+        flag: z.enum(['low', 'high', 'normal']),
         area: z.enum([
           'iron',
           'vitamin_d',
@@ -75,5 +75,5 @@ RULES:
 
 reply: max 8 words, warm, no emojis, no hype (e.g. "Two easy fixes for better sleep.").
 focus: what they care about, max 6 plain words ("low iron", "knee pain on stairs", "evening biscuit snacking"); "" if unclear.
-findings: ONLY for a report or lab photo: every marker flagged out of its reference range, copied exactly (marker name, value, unit), flag low/high, and area: iron (haemoglobin, ferritin, serum iron, transferrin saturation), vitamin_d, b12, sugar (HbA1c, fasting/random glucose), cholesterol (total, LDL, HDL), triglycerides, thyroid (TSH, T3, T4), else other. Leave out normal values. [] for words or food photos.
+findings: ONLY for a report or lab photo, copied exactly (marker name, value, unit), with area: iron (haemoglobin, ferritin, serum iron, transferrin saturation), vitamin_d, b12, sugar (HbA1c, fasting/random glucose), cholesterol (total, LDL, HDL), triglycerides, thyroid (TSH, T3, T4), else other. Include every marker outside the report's reference range (flag low/high), and for each of the named areas the report tested where everything is in range, its main marker once (flag normal), so the next report can show progress. No normal markers for area other. [] for words or food photos.
 Return only the JSON object.`;
