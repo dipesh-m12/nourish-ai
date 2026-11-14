@@ -22,10 +22,14 @@ export interface VersionRule {
 const CACHE_TTL_SECONDS = 300;
 const cacheKey = (platform: Platform) => `app-version:${platform}`;
 
-const DEFAULT_MESSAGE = 'This version of Nourish AI is no longer supported. Please update to keep going.';
+const DEFAULT_MESSAGE =
+  'This version of Nourish AI is no longer supported. Please update to keep going.';
 
 async function fromDb(platform: Platform): Promise<VersionRule> {
-  const [row] = await db.select().from(appVersionRules).where(eq(appVersionRules.platform, platform));
+  const [row] = await db
+    .select()
+    .from(appVersionRules)
+    .where(eq(appVersionRules.platform, platform));
   return {
     platform,
     blockedThrough: row?.blockedThrough ?? null,
@@ -46,7 +50,9 @@ export const appVersionService = {
       return fromDb(platform);
     }
     const rule = await fromDb(platform);
-    await redis.set(cacheKey(platform), JSON.stringify(rule), 'EX', CACHE_TTL_SECONDS).catch(() => null);
+    await redis
+      .set(cacheKey(platform), JSON.stringify(rule), 'EX', CACHE_TTL_SECONDS)
+      .catch(() => null);
     return rule;
   },
 

@@ -1,5 +1,9 @@
 import type { RequestHandler } from 'express';
-import { appVersionService, PLATFORMS, type Platform } from '../services/app-version/app-version.service';
+import {
+  appVersionService,
+  PLATFORMS,
+  type Platform,
+} from '../services/app-version/app-version.service';
 import { AppError } from '../utils/app-error';
 
 /**

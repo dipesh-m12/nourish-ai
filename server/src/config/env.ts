@@ -10,6 +10,9 @@ const envSchema = z.object({
   // AI: both optional. With no keys, plans fall back to a built-in template.
   GEMINI_API_KEY: z.string().default(''),
   GEMINI_MODEL: z.string().default('gemini-3.5-flash'),
+  /** Voice mode replies. Model name per Firebase AI Logic docs; change here if Google renames it. */
+  GEMINI_TTS_MODEL: z.string().default('gemini-3.1-flash-tts-preview'),
+  GEMINI_TTS_VOICE: z.string().default('Kore'),
   // Tried in order when the main model is overloaded or rate-limited (same key, separate capacity).
   GEMINI_FALLBACK_MODELS: z
     .string()

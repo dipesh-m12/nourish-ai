@@ -44,6 +44,11 @@ export const profileController = {
     res.json(await profileService.setPreferences(authedProfileId(req), req.body));
   },
 
+  async registerDevice(req: Request, res: Response) {
+    await profileService.registerDevice(authedProfileId(req), req.body);
+    res.status(204).end();
+  },
+
   async removeAvatar(req: Request, res: Response) {
     res.json(await profileService.removeAvatar(authedProfileId(req)));
   },

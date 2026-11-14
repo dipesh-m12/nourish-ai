@@ -1,10 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import { and, asc, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, isNull, ne, sql } from 'drizzle-orm';
 import { db } from '../db';
 import { goals, profiles, type Goal, type Profile } from '../db/schema';
 import { AppError } from '../utils/app-error';
 import type {
   CreateProfileInput,
+  DeviceInput,
   OnboardingInput,
   PreferencesInput,
 } from '../validators/profile.validator';
@@ -167,6 +168,32 @@ export const profileService = {
     return this.getById(id);
   },
 
+  /**
+   * Called on every app open: where the user's clock is, how to reach the device, and that
+   * they're active (nudges skip users who are already in the app). A token belongs to one
+   * profile: switching profiles on a phone moves it, so the old profile stops getting pushes.
+   */
+  async registerDevice(id: string, input: DeviceInput) {
+    await db.transaction(async (tx) => {
+      if (input.pushToken) {
+        await tx
+          .update(profiles)
+          .set({ pushToken: null })
+          .where(and(eq(profiles.pushToken, input.pushToken), ne(profiles.id, id)));
+      }
+      const [row] = await tx
+        .update(profiles)
+        .set({
+          timezone: input.timezone,
+          lastActiveAt: new Date(),
+          ...(input.pushToken !== undefined && { pushToken: input.pushToken }),
+        })
+        .where(and(eq(profiles.id, id), active))
+        .returning({ id: profiles.id });
+      if (!row) throw AppError.notFound('Profile');
+    });
+  },
+
   /** Merges preference changes into what's stored (one part at a time). */
   async setPreferences(id: string, input: PreferencesInput) {
     const [row] = await db
@@ -178,6 +205,10 @@ export const profileService = {
     const preferences = { ...row.preferences };
     if (input.assistantIntroSeen !== undefined) {
       preferences.assistantIntroSeen = input.assistantIntroSeen;
+    }
+    if (input.whatsNewSeen) preferences.whatsNewSeen = input.whatsNewSeen;
+    if (input.reminders) {
+      preferences.reminders = { ...preferences.reminders, ...input.reminders };
     }
     if (input.companion) {
       const current = preferences.companion;

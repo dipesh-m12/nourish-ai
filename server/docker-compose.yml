@@ -26,9 +26,33 @@ services:
       driver: json-file
       options: { max-size: '10m', max-file: '3' }
 
+  # Background jobs (push nudges). Same image, its own process, so queue work never slows the API.
+  worker:
+    image: nourish-server:latest
+    command: ['node', 'dist/workers/index.js']
+    env_file: .env.production
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: '6379'
+      NODE_ENV: production
+    depends_on:
+      server:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    # Lets running jobs finish and the send log flush on `docker compose down` / redeploys.
+    stop_grace_period: 30s
+    healthcheck:
+      disable: true
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options: { max-size: '10m', max-file: '3' }
+
   redis:
     image: redis:7-alpine
-    # Only short-lived checkout locks live here: no disk persistence. noeviction = a full Redis
+    # Short-lived state only (checkout locks, version cache, nudge dedup, job queue): no disk
+    # persistence; the worker re-registers its schedule on start. noeviction (BullMQ needs it) = a full Redis
     # refuses writes (checkout says "try again") instead of silently dropping a lock.
     command:
       ['redis-server', '--save', '', '--appendonly', 'no', '--maxmemory', '64mb', '--maxmemory-policy', 'noeviction']

@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { isValidZone } from '../services/notifications/local-time';
+import { isPushToken } from '../services/notifications/push.service';
 
 const nameField = z.string().trim().min(1, 'Name is required').max(30);
 
@@ -8,7 +10,6 @@ export const createProfileSchema = z.object({ name: nameField });
 export const nameQuerySchema = z.object({ name: nameField });
 
 // Ranges catch typos (e.g. 1700 cm) without excluding real people.
-/** Per-profile app preferences (just the assistant toggle for now). */
 /**
  * Per-profile app preferences. Each part is optional and merged into what's stored, so the app
  * can change one thing without knowing the rest. Dates and "left" are set by the server only.
@@ -23,10 +24,20 @@ export const preferencesSchema = z
       })
       .optional(),
     assistantIntroSeen: z.boolean().optional(),
+    /** Consent for reminder pushes, per kind. */
+    reminders: z.object({ water: z.boolean().optional() }).optional(),
+    whatsNewSeen: z
+      .string()
+      .regex(/^\d+\.\d+\.\d+$/)
+      .optional(),
   })
   .refine(
     (v) =>
-      v.showAgent !== undefined || v.companion !== undefined || v.assistantIntroSeen !== undefined,
+      v.showAgent !== undefined ||
+      v.companion !== undefined ||
+      v.assistantIntroSeen !== undefined ||
+      v.reminders !== undefined ||
+      v.whatsNewSeen !== undefined,
     {
       message: 'Nothing to update',
     },
@@ -51,3 +62,18 @@ export const onboardingSchema = z.object({
 
 export type CreateProfileInput = z.infer<typeof createProfileSchema>;
 export type OnboardingInput = z.infer<typeof onboardingSchema>;
+
+/** Sent on every app open: the device's clock zone and (if allowed) its push token. */
+export const deviceSchema = z.object({
+  timezone: z.string().trim().min(1).max(64).refine(isValidZone, 'Unknown timezone'),
+  /** null = notifications turned off on this device. Omitted = unchanged. */
+  pushToken: z
+    .string()
+    .trim()
+    .max(200)
+    .refine(isPushToken, 'Not an Expo push token')
+    .nullable()
+    .optional(),
+});
+
+export type DeviceInput = z.infer<typeof deviceSchema>;
