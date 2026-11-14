@@ -108,3 +108,31 @@ function toMinutes(kind: ActivityKind, unit: string, amount: number): number | n
   if (unit === 'sets') return amount * 2;
   return null;
 }
+
+/** Walking kinds count for each other ("brisk walk" logged, "evening walk" challenge). */
+const SAME_FAMILY: Partial<Record<ActivityKind, ActivityKind>> = { brisk_walk: 'walk' };
+const family = (k: ActivityKind) => SAME_FAMILY[k] ?? k;
+/** Minutes per km, to turn time into distance for km challenges. */
+const MIN_PER_KM: Partial<Record<ActivityKind, number>> = { run: 6, cycle: 3 };
+
+/**
+ * The other direction of activityFromChallenge: a logged activity as progress on a movement
+ * challenge, in the challenge's own unit. Null when the kinds differ or the unit can't be
+ * derived from time (e.g. "sets").
+ */
+export function challengeAmountFromActivity(
+  activity: { kind: ActivityKind; minutes: number },
+  c: Pick<Challenge, 'title' | 'category'>,
+  t: ChallengeTracking,
+): number | null {
+  if (c.category !== 'movement' || t.kind !== 'amount' || activity.kind === 'sleep') return null;
+  const challengeKind = KIND_RULES.find(([re]) => re.test(c.title.toLowerCase()))?.[1] ?? null;
+  if (!challengeKind || family(challengeKind) !== family(activity.kind)) return null;
+  const unit = (t.unit ?? '').toLowerCase();
+  const m = activity.minutes;
+  if (/^(min|mins|minutes?)$/.test(unit)) return m;
+  if (/^(h|hrs?|hours?)$/.test(unit)) return Math.round((m / 60) * 100) / 100;
+  if (unit === 'km') return Math.round((m / (MIN_PER_KM[family(activity.kind)] ?? 12)) * 10) / 10;
+  if (unit === 'steps') return Math.round(m * 100);
+  return null;
+}

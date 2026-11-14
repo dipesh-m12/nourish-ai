@@ -4,17 +4,11 @@ import { authedProfileId } from '../middlewares/auth';
 import { burnService } from '../services/burn/burn.service';
 import { AppError } from '../utils/app-error';
 import { activityIdParamSchema, type LogActivityInput } from '../validators/activity.validator';
-import { looksLikeImage } from '../validators/image.validator';
 
 export const activityController = {
-  /** 201 when the photo was accepted; 200 with verified:false when it wasn't (client retries). */
   async log(req: Request, res: Response) {
-    const body = req.body as LogActivityInput;
-    if (!looksLikeImage(Buffer.from(body.image.base64, 'base64'), body.image.mimeType)) {
-      throw new AppError(400, 'That file is not a valid image');
-    }
-    const result = await burnService.log(authedProfileId(req), body);
-    res.status(result.verified ? 201 : 200).json(result);
+    const result = await burnService.log(authedProfileId(req), req.body as LogActivityInput);
+    res.status(201).json(result);
   },
 
   async remove(req: Request<{ id: string }>, res: Response) {

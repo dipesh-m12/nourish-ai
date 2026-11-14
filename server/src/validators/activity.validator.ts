@@ -22,7 +22,8 @@ export const logActivitySchema = z
       .optional(),
     minutes: z.number().int().min(1).max(600).optional(),
     calories: z.number().int().min(1).max(3000).optional(),
-    image: imageInputSchema,
+    /** Optional since 1.1: no photo proof (nobody competes, so nobody cheats). Ignored. */
+    image: imageInputSchema.optional(),
   })
   .refine((v) => (v.minutes === undefined) !== (v.calories === undefined), {
     message: 'Send minutes or calories, not both',
