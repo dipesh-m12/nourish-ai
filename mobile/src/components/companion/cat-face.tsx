@@ -19,7 +19,7 @@ const EASE = Easing.inOut(Easing.quad);
 
 /**
  * Mochi, showing her mood. A new mood crossfades in; happy gives a little hop every few
- * seconds, sad droops slightly, left is faded. Reduced motion: still faces only.
+ * seconds, sad droops slightly, left shows her empty cushion. Reduced motion: still faces only.
  */
 export function CatFace({ mood, size }: { mood: CompanionMood; size: number }) {
   const reduceMotion = useReducedMotion();
@@ -43,7 +43,6 @@ export function CatFace({ mood, size }: { mood: CompanionMood; size: number }) {
 
   const style = useAnimatedStyle(() => ({
     transform: [{ translateY: hop.get() }, { rotate: mood === 'sad' ? '-4deg' : '0deg' }],
-    opacity: mood === 'left' ? 0.4 : 1,
   }));
 
   return (

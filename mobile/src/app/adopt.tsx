@@ -166,8 +166,8 @@ export default function AdoptScreen() {
               </Heading>
               <Text className="mt-2 text-center text-muted">
                 {adopted
-                  ? 'Keep your daily challenges going and she stays happy.'
-                  : 'Daily challenges keep her happy. She’s counting on you.'}
+                  ? 'Keep your challenges going and she stays happy.'
+                  : 'Daily challenges keep her happy.'}
               </Text>
               <View className="mt-10 gap-2 self-stretch">
                 {adopted ? (
