@@ -20,15 +20,11 @@ const ZOOM = 17;
 const STREET_ZOOM = 14;
 /** After the user pans away, follow the dot again on its own after this long. */
 const REFOLLOW_MS = 8000;
-/** A live fix worse than this isn't drawn onto the line (it would zig-zag). */
-const LINE_ACCURACY_M = 25;
 
 interface Props {
   path: LngLat[];
   /** Location permission granted: show the blue dot and follow it. */
   locate: boolean;
-  /** The walk is running: the line runs on to where the phone is right now. */
-  live: boolean;
 }
 
 /**
@@ -36,7 +32,7 @@ interface Props {
  * bold sage line with a white edge (readable on any street), starting at a sage dot.
  * Panning the map pauses the follow; the locate button (or a few seconds) brings it back.
  */
-export function WalkMap({ path, locate, live }: Props) {
+export function WalkMap({ path, locate }: Props) {
   const camera = useRef<CameraRef>(null);
   const position = useLivePosition(locate);
   const [following, setFollowing] = useState(true);
@@ -45,7 +41,6 @@ export function WalkMap({ path, locate, live }: Props) {
   const zoom = useRef(3.5);
   const lng = position?.coords.longitude;
   const lat = position?.coords.latitude;
-  const here: LngLat | null = lng !== undefined && lat !== undefined ? [lng, lat] : null;
 
   // Every fix moves the camera to the dot. Still on the country view (first fix, or a fix that
   // came before the map was ready): jump straight to street level instead.
@@ -62,8 +57,9 @@ export function WalkMap({ path, locate, live }: Props) {
     return () => clearTimeout(timer);
   }, [following]);
 
-  const accurate = (position?.coords.accuracy ?? Infinity) <= LINE_ACCURACY_M;
-  const line = live && here && accurate && path.length > 0 ? [...path, here] : path;
+  // Only the smoothed route (utils/trail.ts): tacking the raw live fix on the end made the
+  // tip jump about, and with a short route it drew one straight line from the start.
+  const line = path;
 
   return (
     <View className="flex-1">

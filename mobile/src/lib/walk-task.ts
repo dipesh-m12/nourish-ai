@@ -51,8 +51,9 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(
       t: l.timestamp,
     }));
     await locked(async () => {
-      // Keep the newest few thousand: a long walk never grows storage without bound.
-      const all = [...(await readFixes()), ...fresh].slice(-5000);
+      // Keep the newest 10 000 (~2¾ h at one a second, < 1 MB): a long walk never grows storage
+      // without bound, and the app drains them every second while it's open anyway.
+      const all = [...(await readFixes()), ...fresh].slice(-10_000);
       await AsyncStorage.setItem(FIXES_KEY, JSON.stringify(all));
     });
   },
@@ -95,9 +96,9 @@ export async function startBackgroundWalk(): Promise<boolean> {
     await drainFixes(); // nothing left over from an older walk
     if (await Location.hasStartedLocationUpdatesAsync(WALK_TASK)) return true;
     await Location.startLocationUpdatesAsync(WALK_TASK, {
-      accuracy: Location.Accuracy.High,
-      timeInterval: 2000,
-      distanceInterval: 5,
+      accuracy: Location.Accuracy.BestForNavigation,
+      timeInterval: 1000,
+      distanceInterval: 1,
       pausesUpdatesAutomatically: false,
       foregroundService: {
         notificationTitle: 'Walk in progress',

@@ -142,7 +142,7 @@ export default function WalkScreen() {
   return (
     <View className="flex-1 bg-bg">
       {walk.status === 'running' && <KeepAwake />}
-      <WalkMap path={walk.path} locate={walk.allowed === true} live={walk.status === 'running'} />
+      <WalkMap path={walk.path} locate={walk.allowed === true} />
 
       <SafeAreaView edges={['top']} className="absolute left-4 top-0">
         <Pressable

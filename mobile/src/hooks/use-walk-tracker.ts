@@ -8,6 +8,7 @@ import { sessionsApi } from '@/api/sessions';
 import { stepsBetween } from '@/lib/health';
 import { drainFixes, startBackgroundWalk, stopBackgroundWalk, type RawFix } from '@/lib/walk-task';
 import { metresBetween, type LngLat } from '@/utils/geo';
+import { extendTrail, type TrailFilter } from '@/utils/trail';
 
 /** GPS fixes worse than this are ignored (indoors they wander by tens of metres). */
 const MAX_ACCURACY_M = 25;
@@ -26,6 +27,11 @@ const STILL_AFTER_MS = 8000;
  * reports in batches, so a shorter window drops real points and leaves the route blank.
  */
 const FEET_STILL_MS = 20_000;
+/**
+ * The drawn route stops while the step counter says you're standing (no step this long). Shorter
+ * than FEET_STILL_MS: a pause in drawing costs a short straight bit; drawing drift costs a scribble.
+ */
+const TRAIL_STILL_MS = 10_000;
 /** Started offline: try to open the server session again this often. */
 const START_RETRY_MS = 30_000;
 /** A clock tick later than this means the app was asleep or closed: fill the gap. */
@@ -56,7 +62,10 @@ export interface WalkState {
   pauses: number;
   /** Time credited while the app wasn't running. */
   awayMs: number;
+  /** The route as walked, for the map and the trophy (utils/trail.ts), not for distance. */
   path: LngLat[];
+  /** The route smoother's state (missing in walks saved by older builds). */
+  trail?: TrailFilter | null;
   /** Last moment the app's clock ran. */
   lastTickAt: number;
   /** Last counted GPS point. */
@@ -91,8 +100,11 @@ export function downsample(path: LngLat[], max = 1000): LngLat[] {
  * it, the gap is filled from Health Connect steps, or counted as time if there's nothing to go on
  * (and the card says so).
  *
- * Sitting still adds nothing: with a step counter, GPS only counts while steps are coming in;
- * without one, a fix must leave its own accuracy circle.
+ * Two separate uses of each GPS fix:
+ * - the route on the map: every usable fix, smoothed, a point every few metres while moving
+ *   (utils/trail.ts), so a lap of a lobby draws as a loop;
+ * - the distance: strict, so sitting still adds nothing. With a step counter, GPS only counts
+ *   while steps are coming in; without one, a fix must leave its own accuracy circle.
  */
 export function useWalkTracker({ maxSpeed = MAX_SPEED_MS }: { maxSpeed?: number } = {}) {
   const [walk, setWalk] = useState<WalkState | null>(null);
@@ -144,6 +156,12 @@ export function useWalkTracker({ maxSpeed = MAX_SPEED_MS }: { maxSpeed?: number 
     (fix: RawFix, live: boolean) => {
       const s = ref.current;
       if (!s || s.status !== 'running') return;
+      // The route first, with its own looser rules: it must show the loop you walked.
+      const standing =
+        live && hasPedometer.current && Date.now() - lastStepAt.current > TRAIL_STILL_MS;
+      s.trail = extendTrail(s.path, s.trail ?? null, fix, standing);
+
+      // Then the distance, strictly.
       const accuracy = fix.acc ?? MAX_ACCURACY_M;
       if (accuracy > MAX_ACCURACY_M) return;
       const point: LngLat = [fix.lng, fix.lat];
@@ -152,7 +170,6 @@ export function useWalkTracker({ maxSpeed = MAX_SPEED_MS }: { maxSpeed?: number 
       lastFixT.current = fix.t;
       if (!prev) {
         s.anchor = point;
-        s.path.push(point);
         return;
       }
       const moved = metresBetween(prev, point);
@@ -165,7 +182,6 @@ export function useWalkTracker({ maxSpeed = MAX_SPEED_MS }: { maxSpeed?: number 
         live && hasPedometer.current && Date.now() - lastStepAt.current > FEET_STILL_MS;
       s.anchor = point; // re-anchor either way, so a skipped jump is never added later
       if (glitch || feetStill) return;
-      s.path.push(point);
       s.metres += moved;
       if (live) lastMoveAt.current = Date.now();
       // Background fixes carry their own clock: close-together ones mean walking in between.
@@ -216,7 +232,8 @@ export function useWalkTracker({ maxSpeed = MAX_SPEED_MS }: { maxSpeed?: number 
 
     if (!s.background) {
       void Location.watchPositionAsync(
-        { accuracy: Location.Accuracy.High, timeInterval: 2000, distanceInterval: 5 },
+        // A fix a second: corners of a small loop need it (the route filters the noise).
+        { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 0 },
         ({ coords, timestamp }) => {
           if (!live) return;
           takeFix(
@@ -391,6 +408,7 @@ export function useWalkTracker({ maxSpeed = MAX_SPEED_MS }: { maxSpeed?: number 
     s.status = 'running';
     s.lastTickAt = Date.now(); // a pause never counts as time away
     s.anchor = null; // nor as distance
+    s.trail = null; // the route picks up from where you are now
     lastMoveAt.current = Date.now();
     lastStepAt.current = Date.now();
     wasMoving.current = true;
