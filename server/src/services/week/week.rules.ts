@@ -164,8 +164,9 @@ export function buildWeek(i: WeekInput): WeekReview {
     h.id && h.goal !== undefined && to != null
       ? { challengeId: h.id, label: h.label, from: h.goal, to, unit: h.unit ?? null }
       : null;
-  // A full week, every day: the goal can grow (from tomorrow).
-  const levelUp = top && top.active >= 7 && top.done === top.active ? change(top, top.up) : null;
+  // A full week, every day, on a habit that can grow (water and sleep can't): the next step.
+  const perfect = rated.find((h) => h.active >= 7 && h.done === h.active && h.up != null);
+  const levelUp = perfect ? change(perfect, perfect.up) : null;
   const worst = sorted.length > 1 ? sorted[sorted.length - 1]! : null;
   // Judge a habit only after a few days (day one, today still open, is not "missing" it).
   const focus =

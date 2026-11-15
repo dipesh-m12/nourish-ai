@@ -111,6 +111,7 @@ describe('the PA offers it', () => {
       thisWeek: totals,
       lastWeek: totals,
       habits: [
+        { id: 'h', label: 'Water', unit: 'L', done: 7, active: 7, goal: 3, up: null, down: null },
         { id: 'w', label: 'Walk', unit: 'min', done: 7, active: 7, goal: 20, up: 25, down: 15 },
         { id: 'p', label: 'Plank', unit: 'min', done: 2, active: 7, goal: 3, up: 4, down: 2 },
       ],
