@@ -23,13 +23,15 @@ Notifications.setNotificationHandler({
 });
 
 /**
- * Android channel for every reminder and nudge. Android fixes a channel's sound when it's first
- * created, so earlier ids (made without a usable sound) are replaced by this one, which uses
- * the system sound (no `sound` key: a named one must be a bundled file) and vibration. Old
- * channels are deleted. The server sends to the same id (push.service.ts).
+ * Android channel for every reminder and nudge, with Nourish's own chime (bundled by the
+ * expo-notifications plugin from assets/sounds, see app.json). Android fixes a channel's sound
+ * when it's first created, so a new sound needs a new id; older channels are deleted. The
+ * server sends to the same id (push.service.ts).
  */
-export const CHANNEL = 'nourish-reminders';
-const OLD_CHANNELS = ['nudges', 'nourish-alerts'];
+export const CHANNEL = 'nourish-chime';
+/** The bundled file's name (Android raw resource: lowercase, underscores). */
+export const CHIME = 'nourish_chime.wav';
+const OLD_CHANNELS = ['nudges', 'nourish-alerts', 'nourish-reminders'];
 
 /**
  * The device's Expo push token, asking for permission once. null = no permission, emulator, or
@@ -45,6 +47,7 @@ export async function pushToken(ask = false): Promise<string | null> {
     await Notifications.setNotificationChannelAsync(CHANNEL, {
       name: 'Reminders and nudges',
       importance: AndroidImportance.HIGH,
+      sound: CHIME,
       enableVibrate: true,
       vibrationPattern: [0, 250, 150, 250],
       lightColor: colors.primary,

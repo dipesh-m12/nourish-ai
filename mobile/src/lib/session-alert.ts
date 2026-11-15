@@ -1,6 +1,6 @@
 import * as Notifications from 'expo-notifications';
 import type { TodayChallenge } from '@/types/today';
-import { CHANNEL } from './push';
+import { CHANNEL, CHIME } from './push';
 
 /**
  * A local notification for when a timer ends, so a session finished with the app closed still
@@ -18,7 +18,7 @@ export async function scheduleDoneAlert(challenge: TodayChallenge, minutes: numb
         title: `${challenge.tracking.label ?? challenge.title} · done`,
         body: `${minutes} min. Tap to count it.`,
         data: { url: `/dashboard?open=challenge&id=${challenge.id}` },
-        sound: true,
+        sound: CHIME,
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,

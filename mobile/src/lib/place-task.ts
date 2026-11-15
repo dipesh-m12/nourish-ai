@@ -5,7 +5,7 @@ import * as TaskManager from 'expo-task-manager';
 import type { TodayChallenge } from '@/types/today';
 import { localDate } from '@/utils/date';
 import { API_BASE_URL } from './api-config';
-import { CHANNEL } from './push';
+import { CHANNEL, CHIME } from './push';
 import { tokenStorage } from './token-storage';
 
 /**
@@ -46,7 +46,7 @@ TaskManager.defineTask<{ eventType: Location.GeofencingEventType; region: Region
           title: 'You showed up',
           body: `Checked in${name ? ` at ${name}` : ''}. Nicely done.`,
           data: { url: `/place?id=${id}` },
-          sound: true,
+          sound: CHIME,
         },
         trigger: { channelId: CHANNEL },
       });

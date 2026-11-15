@@ -24,10 +24,10 @@ export const pushService = {
       to: token,
       title: msg.title,
       body: msg.body,
-      sound: 'default',
+      sound: 'nourish_chime.wav',
       // Must match the app's Android channel (mobile/src/lib/push.ts → CHANNEL): it carries
-      // the sound and vibration.
-      channelId: 'nourish-reminders',
+      // the chime and vibration. Builds without it fall back to the default channel.
+      channelId: 'nourish-chime',
       priority: 'high',
       // The app reads `url` when the notification is tapped and opens that screen.
       data: { url: msg.url },
