@@ -112,7 +112,8 @@ export function buildWeek(i: WeekInput): WeekReview {
       label: 'Full days',
       now: `${t.fullDays} of ${t.activeDays}`,
       before: l.activeDays ? `${l.fullDays} of ${l.activeDays}` : null,
-      better: l.activeDays ? t.fullDays / t.activeDays >= l.fullDays / l.activeDays : null,
+      // More full days is better (the pill shows the same count, so colour and sign agree).
+      better: l.activeDays ? t.fullDays >= l.fullDays : null,
       change: moved(t.fullDays, l.activeDays ? l.fullDays : null),
     });
   }
