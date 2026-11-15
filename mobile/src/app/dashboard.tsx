@@ -6,7 +6,7 @@ import { ActivityIndicator, Pressable, RefreshControl, ScrollView, View } from '
 import Animated, { FadeInDown, LinearTransition } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBriefing } from '@/api/briefing';
-import { levelToast, useSetLevel } from '@/api/challenges';
+import { type GoalContext, levelToast, useSetLevel } from '@/api/challenges';
 import { useAcceptChallenges, usePlan } from '@/api/plan';
 import { useMe, useSetShowAgent } from '@/api/profiles';
 import { useToday } from '@/api/today';
@@ -75,6 +75,7 @@ export default function DashboardScreen() {
   const health = useHealthSync(date, today.data?.challenges ?? []);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [goalOpen, setGoalOpen] = useState(false);
+  const [goalContext, setGoalContext] = useState<GoalContext | undefined>();
   const [remindersOpen, setRemindersOpen] = useState(false);
   const [menuFor, setMenuFor] = useState<TodayChallenge | null>(null);
   const [logFor, setLogFor] = useState<TodayChallenge | null>(null);
@@ -178,6 +179,10 @@ export default function DashboardScreen() {
     if (a.kind === 'ask')
       return router.push({ pathname: '/assistant', params: { prompt: a.prompt } });
     if (a.kind === 'add_challenge') return addChallenge(a.challengeId);
+    if (a.kind === 'checkin') {
+      setGoalContext('checkin');
+      return setGoalOpen(true);
+    }
     if (a.kind === 'level_up')
       return setLevel.mutate(
         { id: a.challengeId, date, direction: 'up' },
@@ -190,7 +195,11 @@ export default function DashboardScreen() {
   // A tapped nudge lands here with what to open:
   // /dashboard?open=meal | open=goal | open=reminders | open=challenge&id=… (other screens are their own routes).
   // The sheet is derived from the link (no extra state); closing it clears the link.
-  const { open, id } = useLocalSearchParams<{ open?: string; id?: string }>();
+  const { open, id, context } = useLocalSearchParams<{
+    open?: string;
+    id?: string;
+    context?: string;
+  }>();
   const linked = open === 'challenge' ? today.data?.challenges.find((x) => x.id === id) : undefined;
   const linkedMeal: MealSheetRequest | null =
     open === 'meal'
@@ -200,7 +209,7 @@ export default function DashboardScreen() {
         : null;
   const linkedLog = linked && linked.logsVia !== 'meal' ? linked : null;
   const clearLink = () => {
-    if (open) router.setParams({ open: undefined, id: undefined });
+    if (open) router.setParams({ open: undefined, id: undefined, context: undefined });
   };
   // A link to a challenge that has since ended: drop it quietly once the day has loaded.
   const deadLink = open === 'challenge' && !!today.data && !linked;
@@ -405,8 +414,11 @@ export default function DashboardScreen() {
       <GoalSheet
         visible={goalOpen || open === 'goal'}
         date={date}
+        // The PA's check-in (card or push) opens it with a reason the AI reads.
+        context={goalContext ?? (context === 'checkin' ? 'checkin' : undefined)}
         onClose={() => {
           setGoalOpen(false);
+          setGoalContext(undefined);
           clearLink();
         }}
         onManage={() => {

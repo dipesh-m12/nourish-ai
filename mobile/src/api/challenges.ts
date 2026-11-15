@@ -17,8 +17,13 @@ function useRefreshChallenges() {
   };
 }
 
+/** Why the "+" sheet was opened; the AI reads it ('checkin' = a progress update, e.g. weight). */
+export type GoalContext = 'checkin';
+
 export interface ProposeResult {
   reply: string;
+  /** A check-in weight that was saved (targets follow it). */
+  weight: { from: number | null; to: number; dailyCalories: number } | null;
   proposals: ChallengeProposal[];
   /** Already at the daily maximum: finish one first. */
   full: boolean;
@@ -27,7 +32,12 @@ export interface ProposeResult {
 /** "What do you want to achieve?" → AI proposals. Nothing is saved. */
 export function useProposeChallenges() {
   return useMutation({
-    mutationFn: (body: { date: string; text?: string; image?: Photo | Report }) =>
+    mutationFn: (body: {
+      date: string;
+      text?: string;
+      image?: Photo | Report;
+      context?: GoalContext;
+    }) =>
       request<ProposeResult>('/me/challenges/propose', {
         method: 'POST',
         body,

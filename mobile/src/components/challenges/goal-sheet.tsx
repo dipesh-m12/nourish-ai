@@ -12,7 +12,13 @@ import {
 import { useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
-import { useCreateChallenges, useProposeChallenges, type ProposeResult } from '@/api/challenges';
+import { useQueryClient } from '@tanstack/react-query';
+import {
+  type GoalContext,
+  useCreateChallenges,
+  useProposeChallenges,
+  type ProposeResult,
+} from '@/api/challenges';
 import { useToday } from '@/api/today';
 import { SuggestedChallenges } from '@/components/dashboard/suggested-challenges';
 import { Button } from '@/components/ui/button';
@@ -39,7 +45,15 @@ interface Props {
   onClose: () => void;
   /** Opens the list of running challenges (view, add back, remove). */
   onManage?: () => void;
+  /** Why it was opened (the PA's check-in): changes the ask, and the AI is told. */
+  context?: GoalContext;
 }
+
+/** The sheet's question and hint for each reason it can be opened. */
+const ASK: Record<GoalContext | 'default', { title: string; hint: string }> = {
+  default: { title: 'What do you want to achieve?', hint: 'Say it, type it, or add a report…' },
+  checkin: { title: 'How’s it going?', hint: 'Your weight today, or anything new…' },
+};
 
 interface Draft {
   keep: boolean;
@@ -51,7 +65,9 @@ interface Draft {
  * "What do you want to achieve?" Say it, type it, or show a photo (a report, a plate).
  * The PA proposes 1–3 challenges with how they'll feel; the user keeps some and says how long.
  */
-export function GoalSheet({ visible, date, onClose, onManage }: Props) {
+export function GoalSheet({ visible, date, onClose, onManage, context }: Props) {
+  const ask = ASK[context ?? 'default'];
+  const queryClient = useQueryClient();
   const active = useToday(date).data?.challenges ?? [];
   const propose = useProposeChallenges();
   const create = useCreateChallenges();
@@ -79,9 +95,24 @@ export function GoalSheet({ visible, date, onClose, onManage }: Props) {
     const words = said.trim();
     if (!words && !photo) return;
     propose.mutate(
-      { date, ...(words && { text: words }), ...(photo && { image: photo }) },
+      {
+        date,
+        ...(words && { text: words }),
+        ...(photo && { image: photo }),
+        ...(context && { context }),
+      },
       {
         onSuccess: (r) => {
+          // A saved weigh-in moves the targets: refresh the day, the card and the week.
+          if (r.weight) {
+            for (const key of ['me', 'today', 'briefing', 'week'])
+              void queryClient.invalidateQueries({ queryKey: [key] });
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            if (!r.proposals.length) {
+              toast(r.reply);
+              return close();
+            }
+          }
           setResult(r);
           setDrafts(r.proposals.map((p) => ({ keep: true, endsOn: p.ask ? undefined : p.endsOn })));
         },
@@ -140,7 +171,7 @@ export function GoalSheet({ visible, date, onClose, onManage }: Props) {
       visible={visible}
       onClose={close}
       tall
-      title={reviewing ? (result?.reply ?? 'Here’s a start') : 'What do you want to achieve?'}
+      title={reviewing ? (result?.reply ?? 'Here’s a start') : ask.title}
       footer={
         reviewing ? (
           <View className="gap-2">
@@ -197,7 +228,7 @@ export function GoalSheet({ visible, date, onClose, onManage }: Props) {
             <TextInput
               value={text}
               onChangeText={setText}
-              placeholder="Say it, type it, or add a report…"
+              placeholder={ask.hint}
               placeholderTextColor={colors.muted}
               multiline
               maxLength={600}
