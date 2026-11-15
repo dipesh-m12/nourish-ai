@@ -128,6 +128,7 @@ Ask before building each format; list kept in the PR for that format.
 | Sessions table: walks/timers survive the app closing, walk trophy card saved + shareable (`/trophy/[id]`), timer done notification | done; background GPS needs the next APK (foreground service on) |
 | Art: 5 redos | dropped: no screen uses them |
 | Design review pass (2026-11-15): briefing why line shown, feel-first report tips + done toasts, report markers over time on `/week`, "Your week" in Profile, starter picks for new users, rest-day streaks, night briefing, non-plate food habits | done |
+| Goals follow progress (level up / ease, from tomorrow), actions only on real challenges, Mochi's room (drawn in code) | done |
 | Commit, release 1.1.0 APK, deploy server + worker, then block 1.0.0 | committed; APK, deploy, block pending (user decides) |
 
 ## Phases

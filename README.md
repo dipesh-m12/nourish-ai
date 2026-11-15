@@ -33,7 +33,7 @@ The 1.0 review said, fairly, that it was "not a PA yet". 1.1 is the answer, poin
 | Photo proof is pointless without competition | Removed. Habits log in one tap. Photos are only for meals, because the plate *is* the data. |
 | The same boring sheet for every habit | **One interaction per habit:** pour a glass of water, a breathing orb, a live walk map, a timed workout with the exercise's photos, a sleep arc, check in at a pinned place. |
 | "Me identifying goals" | Say what you want (voice, text, photo or a **lab report PDF**). The PA proposes 1–3 challenges, never one you already have. |
-| Is my health improving? | **Your week:** this week against last, the best habit, one fix. Your **reports, area by area** (Iron: Low → Normal). |
+| Is my health improving? | **Your week:** this week against last, the best habit, one fix, and **goals that follow progress**: a perfect week offers the next step ("Level up: 25 min"), a slipping habit gets one tap to make it easier. Your **reports, area by area** (Iron: Low → Normal). |
 | Too much text, consistency as stats | A text pass on every screen. Consistency is now Mochi's garden: one plant a day. |
 
 ### The flows
@@ -48,6 +48,8 @@ Around them: **burn tracking** (resting + sleep + activity), an **exercise libra
 ### Motivation and delight
 - **Mochi, a companion cat.** Her mood follows your challenges: purring when the day is done, crying if you missed yesterday, gone after 3 missed days in a row.
 - **Forgiving streaks.** One missed day a week is a rest day: the streak holds, and Mochi tells you she kept it ("just this once"). A streak that dies on one miss is harsher than the habit it's meant to build.
+- **Mochi's room**, drawn in code: every good week (5 of 7 full days) brings her something new (a rug, a cushion, a plant…), and the next item waits as a faint outline. It rewards weeks, not taps, and nothing earned is ever taken away.
+- **Level up:** the day a habit hits a full week in a row, the PA offers the next step in one tap. It starts tomorrow, so finished days stay finished.
 - **Mochi's garden** for the week, confetti when the day is done, walk and workout **trophy cards you can share**, rolling numbers, haptics.
 - **Mochi's Club** (₹149/month, Razorpay test mode): the free plan gets 5 assistant messages, Club is unlimited. Nothing else is behind the paywall.
 
@@ -63,7 +65,7 @@ Around them: **burn tracking** (resting + sleep + activity), an **exercise libra
 | Onboarded with clear goals? | The plan shows the target, the timeline and your reason, then the PA starts you with three picks. |
 | WHAT and WHY? | Every challenge has a feel line; the briefing ties the next step to your own reason. |
 | Who does the work? | The PA picks the next step, reads reports, estimates portions, and logs walks, steps and sleep for you. |
-| Motivation? | Mochi, forgiving streaks, the garden, trophies, confetti. |
+| Motivation? | Mochi and her room, level ups, forgiving streaks, the garden, trophies, confetti. |
 | Is it improving? | Your week, and report markers over time. |
 | Simple? | One question per screen, 1–2 word labels, bottom sheets, one primary button. |
 
@@ -92,7 +94,7 @@ mobile/ (Expo)                         server/ (Express)
                                         db/           Drizzle schema + migrations
 ```
 - **Server layers:** `routes → controllers → services → db`. Errors are thrown as `AppError` and one handler turns them into `{ error: { message, details } }`. Multi-table writes run in transactions.
-- **Rules are pure and tested:** the briefing, nudges, weekly check-in, Mochi's mood, streaks (with the rest day), report priorities and marker trends are plain functions over plain data (`npm test`, 67 tests).
+- **Rules are pure and tested:** the briefing, nudges, weekly check-in, Mochi's mood and room, streaks (with the rest day), goal levels, report priorities and marker trends are plain functions over plain data (`npm test`, 82 tests).
 - **App state:** server data in TanStack Query (mutations invalidate the day's query, so the dashboard always shows the latest), app state in small Zustand stores, the token in SecureStore.
 
 ### Decisions worth calling out
