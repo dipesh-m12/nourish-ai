@@ -1,0 +1,1 @@
+ALTER TABLE "user_signals" ADD COLUMN "weight_kg" real;

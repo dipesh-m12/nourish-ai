@@ -31,6 +31,8 @@ export const proposeChallengesSchema = z
     text: z.string().trim().max(600).optional(),
     /** A photo (plate, label) or a health report: image or PDF. */
     image: reportInputSchema.optional(),
+    /** Why the sheet was opened: 'checkin' = the PA asked for a progress update. */
+    context: z.enum(['checkin']).optional(),
   })
   .refine((v) => Boolean(v.text) || Boolean(v.image), { message: 'Say or show something' });
 

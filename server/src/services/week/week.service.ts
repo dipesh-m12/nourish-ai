@@ -44,11 +44,21 @@ function totals(
   };
 }
 
+/** This week's latest weigh-in against the latest one before the week (null = none this week). */
+function weightWeek(rows: { kg: number; at: Date }[], date: string, goal: string, tz: number) {
+  const day = (at: Date) => new Date(at.getTime() + tz * 60_000).toISOString().slice(0, 10);
+  const from = addDays(date, -6);
+  const now = rows.find((r) => day(r.at) >= from);
+  if (!now) return null;
+  const before = rows.find((r) => day(r.at) < from) ?? null;
+  return { now: now.kg, before: before?.kg ?? null, lower: goal === 'lose_weight' };
+}
+
 export const weekService = {
   /** This week (the 7 days ending today) against the 7 before, for the check-in screen. */
   async review(profileId: string, date: string, tz: number) {
     const from = addDays(date, -13);
-    const [profile, goal, mealRows, activityRows, today, reports] = await Promise.all([
+    const [profile, goal, mealRows, activityRows, today, reports, weighIns] = await Promise.all([
       db.query.profiles.findFirst({ where: eq(profiles.id, profileId), columns: { name: true } }),
       db.query.goals.findFirst({ where: eq(goals.profileId, profileId) }),
       db
@@ -84,6 +94,7 @@ export const weekService = {
         .groupBy(activities.localDate),
       challengeProgressService.today(profileId, date, tz),
       signalsService.markers(profileId),
+      signalsService.weighIns(profileId, 10),
     ]);
     if (!profile || !goal) throw AppError.notFound('Profile');
 
@@ -98,10 +109,14 @@ export const weekService = {
 
     const thisDays = lastNDays(date, 7);
     const lastDays = lastNDays(addDays(date, -7), 7);
+    // Habits are judged on finished days: today counts once it's done, else the 7 days end
+    // yesterday (so the morning after a perfect week still reads 7 of 7).
     const habits = today.challenges
       .filter((c) => c.frequency === 'daily')
       .map((c) => {
-        const week = c.progress.history.filter((h) => thisDays.includes(h.date) && h.active);
+        const end = c.progress.done ? date : addDays(date, -1);
+        const days = lastNDays(end, 7);
+        const week = c.progress.history.filter((h) => days.includes(h.date) && h.active);
         // A goal changed in the last week gets time to settle before the next change.
         const settled = !changedRecently(c.tracking, date);
         return {
@@ -120,6 +135,7 @@ export const weekService = {
       ...buildWeek({
         name: profile.name,
         targets: { calories: goal.dailyCalories, proteinG: goal.proteinG },
+        weight: weightWeek(weighIns, date, goal.type, tz),
         thisWeek: totals(thisDays, byDay, today.challenges),
         lastWeek: totals(lastDays, byDay, today.challenges),
         habits,

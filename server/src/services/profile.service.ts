@@ -234,6 +234,41 @@ export const profileService = {
   },
 
   /** Called when the mood rules say she's gone (3 missed days): remembered until re-adoption. */
+  /**
+   * A new weigh-in: the profile's weight and the day's targets follow it (same formulas as
+   * onboarding). Returns the weight before and after, and the new calorie target.
+   */
+  async updateWeight(id: string, kg: number) {
+    return db.transaction(async (tx) => {
+      const profile = await tx.query.profiles.findFirst({
+        where: and(eq(profiles.id, id), active),
+      });
+      const goal = await tx.query.goals.findFirst({ where: eq(goals.profileId, id) });
+      if (!profile?.sex || !profile.age || !profile.heightCm || !profile.activityLevel || !goal)
+        throw new AppError(409, 'Finish onboarding first');
+      const from = profile.weightKg;
+      const targets = calculateDailyTargets(
+        {
+          sex: profile.sex,
+          age: profile.age,
+          heightCm: profile.heightCm,
+          weightKg: kg,
+          activityLevel: profile.activityLevel,
+        },
+        goal.type,
+        goal.targetWeightKg,
+      );
+      await tx.update(profiles).set({ weightKg: kg }).where(eq(profiles.id, id));
+      await tx.update(goals).set(targets).where(eq(goals.profileId, id));
+      return {
+        from,
+        to: kg,
+        onboardedAt: profile.onboardedAt,
+        dailyCalories: targets.dailyCalories,
+      };
+    });
+  },
+
   /** Mochi's room progress (merged into preferences, nothing else touched). */
   async saveMochiRoom(id: string, room: NonNullable<Preferences['mochiRoom']>) {
     await db

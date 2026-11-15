@@ -176,6 +176,13 @@
       "when": 1794686340790,
       "tag": "0024_user_signals",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1794737832920,
+      "tag": "0025_weigh_ins",
+      "breakpoints": true
     }
   ]
 }

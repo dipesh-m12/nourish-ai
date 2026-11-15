@@ -45,7 +45,11 @@ async function main() {
         activityLevel: 'light',
         dietType: 'veg',
         allergies: [],
-        goal: { type: 'gain_muscle', targetWeightKg: 55, why: 'Climb stairs without getting tired' },
+        goal: {
+          type: 'gain_muscle',
+          targetWeightKg: 55,
+          why: 'Climb stairs without getting tired',
+        },
       }),
     });
 
@@ -58,7 +62,10 @@ async function main() {
       body: JSON.stringify({ date, image: { base64: pdf, mimeType: 'application/pdf' } }),
     });
     assert.equal(proposed.status, 200, JSON.stringify(proposed.body));
-    console.log('proposals:', proposed.body.proposals.map((p: { title: string }) => p.title));
+    console.log(
+      'proposals:',
+      proposed.body.proposals.map((p: { title: string }) => p.title),
+    );
 
     const card = await call(`/me/briefing?date=${date}&tz=${tz}`, { token });
     assert.equal(card.status, 200, JSON.stringify(card.body));

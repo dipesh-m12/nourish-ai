@@ -47,10 +47,12 @@ export interface WeekInput {
   thisWeek: WeekTotals;
   lastWeek: WeekTotals;
   habits: HabitWeek[];
+  /** Latest weigh-in this week and the one before it; `lower` = losing is the goal. */
+  weight?: { now: number; before: number | null; lower: boolean } | null;
 }
 
 export interface WeekStat {
-  key: 'days' | 'protein' | 'move' | 'sleep' | 'kcal';
+  key: 'weight' | 'days' | 'protein' | 'move' | 'sleep' | 'kcal';
   label: string;
   now: string;
   before: string | null;
@@ -90,6 +92,19 @@ export function buildWeek(i: WeekInput): WeekReview {
   const l = i.lastWeek;
   const first = l.activeDays === 0 && l.loggedDays === 0;
   const stats: WeekStat[] = [];
+
+  // The goal's own outcome comes first when there's a weigh-in this week.
+  if (i.weight) {
+    const w = i.weight;
+    stats.push({
+      key: 'weight',
+      label: 'Weight',
+      now: `${round(w.now, 1)} kg`,
+      before: w.before === null ? null : `${round(w.before, 1)} kg`,
+      better: w.before === null ? null : w.lower ? w.now <= w.before : w.now >= w.before,
+      change: moved(w.now, w.before, 'kg', 1),
+    });
+  }
 
   if (t.activeDays) {
     stats.push({

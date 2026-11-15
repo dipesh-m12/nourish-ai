@@ -77,7 +77,10 @@ async function main() {
     const del = await call(`/me/activities/${act.body.activity.id}`, { method: 'DELETE', token });
     assert.equal(del.status, 204, JSON.stringify(del.body));
     day = await call(`/me/today?date=${today}&tz=330`, { token });
-    assert.equal(day.body.challenges.find((c: { id: string }) => c.id === walkId).progress.value, 0);
+    assert.equal(
+      day.body.challenges.find((c: { id: string }) => c.id === walkId).progress.value,
+      0,
+    );
     console.log('✓ activity credit added and removed');
 
     const week = await call(`/me/week?date=${today}&tz=330`, { token });

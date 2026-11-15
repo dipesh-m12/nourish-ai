@@ -20,6 +20,7 @@ export type BriefingKind =
   | 'open_challenges'
   | 'suggest'
   | 'level_up'
+  | 'checkin'
   | 'on_track';
 
 export type BriefingAction =
@@ -29,7 +30,9 @@ export type BriefingAction =
   /** Start one of the plan's ideas (it isn't running yet). */
   | { kind: 'add_challenge'; label: string; challengeId: string }
   /** Raise a challenge's goal one step, from today. */
-  | { kind: 'level_up'; label: string; challengeId: string };
+  | { kind: 'level_up'; label: string; challengeId: string }
+  /** Open the "+" sheet as a check-in: the AI knows it's a progress update (weight…). */
+  | { kind: 'checkin'; label: string };
 
 export interface BriefingChallenge {
   id: string;
@@ -66,6 +69,8 @@ export interface BriefingInput {
   foods: string[];
   /** The plan's ideas the user hasn't started, best first. */
   suggestions: Suggestion[];
+  /** A weight goal and a week since the last weigh-in (or since they started): ask for it. */
+  weighInDue: boolean;
 }
 
 /** A plan idea the PA offers; the card shows it as a row that opens to its why and "Add it". */
@@ -179,7 +184,9 @@ export function buildBriefing(i: BriefingInput): Briefing {
   const idea = i.suggestions.find((s) => !i.challenges.some((c) => c.category === s.category));
 
   // A habit just hit a full week in a row (and every 7 days after): offer the next step.
-  const ready = daily.find((c) => c.done && c.levelUp && c.streak >= 7 && c.streak % 7 === 0);
+  // `streak` counts today only once it's done, so "% 7 === 0" catches both the evening the
+  // week completes and the next morning (the start of week two).
+  const ready = daily.find((c) => c.levelUp && c.streak >= 7 && c.streak % 7 === 0);
   const levelUp = ready
     ? {
         ...base,
@@ -246,6 +253,18 @@ export function buildBriefing(i: BriefingInput): Briefing {
       headline: 'How did you sleep? Log last night in one tap.',
       actions: [{ kind: 'log_challenge', label: `Log ${sleep.label}`, challengeId: sleep.id }],
       why: why('Good sleep makes the rest of the day easier.'),
+      facts: {},
+    };
+  }
+
+  // 2½. Weekly weigh-in for a weight goal: the outcome itself, said in the "+" sheet.
+  if (i.weighInDue && i.hour >= 7) {
+    return {
+      ...base,
+      kind: 'checkin',
+      headline: 'A week in. What do you weigh now?',
+      actions: [{ kind: 'checkin', label: 'Log it' }],
+      why: why('Seeing it move is what keeps you going.'),
       facts: {},
     };
   }

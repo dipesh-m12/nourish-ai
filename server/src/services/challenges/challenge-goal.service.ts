@@ -12,10 +12,18 @@ import { generateStructured } from '../ai/ai.service';
 import { activeChallenges } from './active';
 import { GOAL_SYSTEM_PROMPT, goalProposalSchema } from './challenge-goal.prompt';
 import { signalsService } from '../priorities/signals.service';
+import { profileService } from '../profile.service';
 import { duplicates } from './duplicate';
 import { endsOnFor, extendBy } from './expiry';
 import { goalOn, nextTarget, withTarget } from './level';
 import { ensureTracking } from './tracking.service';
+
+/** "108 kg saved, 2 kg down. Your day is now 2,150 kcal." */
+function weightLine(w: { from: number | null; to: number; dailyCalories: number }) {
+  const d = w.from === null ? 0 : Math.round((w.to - w.from) * 10) / 10;
+  const moved = d === 0 ? '' : `, ${Math.abs(d)} kg ${d < 0 ? 'down' : 'up'}`;
+  return `${w.to} kg saved${moved}. Your day is now ${w.dailyCalories} kcal.`;
+}
 
 /** More than this on one day stops being doable; the app asks to finish one first. */
 const MAX_ACTIVE = 8;
@@ -35,7 +43,10 @@ export const challengeGoalService = {
    * "What do you want to achieve?" → 1–3 proposals. Nothing is saved: the user keeps or drops
    * each one first. The AI reads intent; dates are computed here.
    */
-  async propose(profileId: string, input: { date: string; text?: string; image?: ReportUpload }) {
+  async propose(
+    profileId: string,
+    input: { date: string; text?: string; image?: ReportUpload; context?: 'checkin' },
+  ) {
     if (
       input.image &&
       !looksLikeReport(Buffer.from(input.image.base64, 'base64'), input.image.mimeType)
@@ -93,6 +104,7 @@ export const challengeGoalService = {
               minutes: r.minutes,
             })),
             said: input.text ?? null,
+            openedFor: input.context ?? null,
             sentPhoto: input.image?.mimeType.startsWith('image/') ?? false,
             sentPdfReport: input.image?.mimeType === 'application/pdf',
           }),
@@ -108,11 +120,25 @@ export const challengeGoalService = {
     }
 
     // Remember what they care about, so the PA can follow it (briefing, nudges, chat).
+    // A check-in weight: saved, and the day's targets follow it (code does the maths).
+    const said = result.data.weightKg;
+    const weight =
+      input.context === 'checkin' && said >= 30 && said <= 300
+        ? await this.logWeight(profileId, Math.round(said * 10) / 10)
+        : null;
+
     await signalsService.record(profileId, {
-      kind: input.image ? (input.image.mimeType === 'application/pdf' ? 'report' : 'photo') : 'ask',
+      kind: input.image
+        ? input.image.mimeType === 'application/pdf'
+          ? 'report'
+          : 'photo'
+        : weight
+          ? 'status'
+          : 'ask',
       said: input.text ?? null,
       focus: result.data.focus,
       findings: result.data.findings,
+      weightKg: weight?.to ?? null,
     });
 
     // The model is told not to repeat what's running, but doesn't always listen: code has the
@@ -120,13 +146,38 @@ export const challengeGoalService = {
     const fresh = result.data.challenges.filter((c) => !duplicates(c, active));
     const covered = result.data.challenges.length > 0 && fresh.length === 0;
     return {
-      reply: covered ? 'You already have this covered.' : result.data.reply,
+      // The weight line is code-written (exact numbers); the AI's reply covers the rest.
+      reply: weight
+        ? weightLine(weight)
+        : covered
+          ? 'You already have this covered.'
+          : result.data.reply,
+      weight,
       proposals: fresh.map(({ duration, days, ...c }) => ({
         ...c,
         ...endsOnFor(input.date, duration, days),
       })),
       full: active.length >= MAX_ACTIVE,
     };
+  },
+
+  /**
+   * Saves a weigh-in. The first one also stores where they started (onboarding weight, dated
+   * then), so the week can show the change from day one.
+   */
+  async logWeight(profileId: string, kg: number) {
+    const before = await signalsService.weighIns(profileId, 1);
+    const w = await profileService.updateWeight(profileId, kg);
+    if (!before.length && w.from && w.onboardedAt)
+      await signalsService.record(profileId, {
+        kind: 'status',
+        said: null,
+        focus: '',
+        findings: [],
+        weightKg: w.from,
+        at: w.onboardedAt,
+      });
+    return { from: w.from, to: kg, dailyCalories: w.dailyCalories };
   },
 
   /** Saves what the user kept, taken on straight away. */

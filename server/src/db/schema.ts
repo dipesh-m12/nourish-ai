@@ -632,11 +632,13 @@ export const userSignals = pgTable(
     profileId: uuid('profile_id')
       .notNull()
       .references(() => profiles.id, { onDelete: 'cascade' }),
-    kind: text('kind').$type<'ask' | 'report' | 'photo'>().notNull(),
+    kind: text('kind').$type<'ask' | 'report' | 'photo' | 'status'>().notNull(),
     /** Their own words, if they typed or said something. */
     said: text('said'),
     focus: text('focus'),
     findings: jsonb('findings').$type<ReportFinding[]>().notNull().default([]),
+    /** A weigh-in ('status' rows): what they told the PA they weigh now. */
+    weightKg: real('weight_kg'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('user_signals_profile_created_idx').on(t.profileId, t.createdAt)],

@@ -73,6 +73,7 @@ describe('the PA offers it', () => {
       findings: [],
       foods: [],
       suggestions: [],
+      weighInDue: false,
       challenges: [
         {
           id: 'w',
@@ -125,6 +126,35 @@ describe('the PA offers it', () => {
       from: 3,
       to: 2,
       unit: 'min',
+    });
+  });
+
+  it('a weigh-in leads the week, and down is better when losing', () => {
+    const zero: WeekTotals = {
+      activeDays: 0,
+      fullDays: 0,
+      loggedDays: 0,
+      avgKcal: 0,
+      avgProteinG: 0,
+      activeMinutes: 0,
+      sleepNights: 0,
+      avgSleepH: 0,
+    };
+    const w = buildWeek({
+      name: 'Ravi',
+      targets: { calories: 2000, proteinG: 100 },
+      thisWeek: zero,
+      lastWeek: zero,
+      habits: [],
+      weight: { now: 107.2, before: 108.5, lower: true },
+    });
+    assert.deepEqual(w.stats[0], {
+      key: 'weight',
+      label: 'Weight',
+      now: '107.2 kg',
+      before: '108.5 kg',
+      better: true,
+      change: '−1.3 kg',
     });
   });
 });

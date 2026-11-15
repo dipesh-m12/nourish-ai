@@ -19,7 +19,9 @@ async function main() {
     .limit(1);
   const date = new Date().toISOString().slice(0, 10);
   for (const file of ['report-1-vitamins-low.pdf', 'report-2-sugar-cholesterol-high.pdf']) {
-    const base64 = readFileSync(join(__dirname, '..', '..', 'docs', 'test-reports', file)).toString('base64');
+    const base64 = readFileSync(join(__dirname, '..', '..', 'docs', 'test-reports', file)).toString(
+      'base64',
+    );
     const r = await challengeGoalService.propose(p!.id, {
       date,
       image: { base64, mimeType: 'application/pdf' },

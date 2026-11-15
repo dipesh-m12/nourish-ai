@@ -35,6 +35,7 @@ const base: BriefingInput = {
   findings: [],
   foods: ['poha'],
   suggestions: [],
+  weighInDue: false,
 };
 
 describe('briefing actions always point at something real', () => {
@@ -133,5 +134,23 @@ describe('briefing actions always point at something real', () => {
     const b = buildBriefing({ ...base, hour: 2, challenges: [challenge({})] });
     assert.equal(b.actions.length, 0);
     assert.match(b.headline, /late/i);
+  });
+
+  it('a weight goal a week in: asks for the weight, which opens the check-in', () => {
+    const b = buildBriefing({ ...base, weighInDue: true });
+    assert.equal(b.kind, 'checkin');
+    assert.deepEqual(b.actions[0], { kind: 'checkin', label: 'Log it' });
+  });
+
+  it('the morning after a perfect week: offers the step up before today is done', () => {
+    const walk = challenge({ id: 'w', streak: 7, levelUp: 25, done: false, value: 0 });
+    const b = buildBriefing({
+      ...base,
+      hour: 9,
+      sleepMinutes: 420,
+      mealHours: [8],
+      challenges: [walk],
+    });
+    assert.equal(b.kind, 'level_up');
   });
 });

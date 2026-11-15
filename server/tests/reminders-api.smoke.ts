@@ -66,7 +66,9 @@ async function main() {
     });
     assert.equal(plan.status, 200, JSON.stringify(plan.body));
     console.log(plan.body);
-    const by = new Map(plan.body.changes.map((c: { id: string; remindAt: string | null }) => [c.id, c.remindAt]));
+    const by = new Map(
+      plan.body.changes.map((c: { id: string; remindAt: string | null }) => [c.id, c.remindAt]),
+    );
     assert.equal(by.get(walk!.id), '07:00');
     assert.equal(by.get(water!.id), '09:00');
     assert.equal(by.get(sleep!.id), null);
@@ -83,20 +85,26 @@ async function main() {
       method: 'PUT',
       token,
       body: JSON.stringify({
-        items: plan.body.changes.map((c: { id: string; remindAt: string | null }) => ({ id: c.id, remindAt: c.remindAt })),
+        items: plan.body.changes.map((c: { id: string; remindAt: string | null }) => ({
+          id: c.id,
+          remindAt: c.remindAt,
+        })),
         water: plan.body.water,
       }),
     });
     assert.equal(apply.status, 200);
     const after = await call(`/me/today?date=${today}&tz=330`, { token });
-    const t = (id: string) => after.body.challenges.find((c: { id: string }) => c.id === id).remindAt;
+    const t = (id: string) =>
+      after.body.challenges.find((c: { id: string }) => c.id === id).remindAt;
     assert.equal(t(walk!.id), '07:00');
     assert.equal(t(sleep!.id), null);
 
     const foreign = await call('/me/reminders', {
       method: 'PUT',
       token,
-      body: JSON.stringify({ items: [{ id: '00000000-0000-4000-8000-000000000000', remindAt: '08:00' }] }),
+      body: JSON.stringify({
+        items: [{ id: '00000000-0000-4000-8000-000000000000', remindAt: '08:00' }],
+      }),
     });
     assert.equal(foreign.status, 404, 'someone else’s id refused');
     console.log('reminders smoke: ok');

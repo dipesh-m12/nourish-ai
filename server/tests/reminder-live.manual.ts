@@ -24,7 +24,13 @@ async function main() {
   const [c] = await db
     .select({ id: challenges.id, title: challenges.title })
     .from(challenges)
-    .where(and(eq(challenges.profileId, p.id), eq(challenges.accepted, true), eq(challenges.title, title!)))
+    .where(
+      and(
+        eq(challenges.profileId, p.id),
+        eq(challenges.accepted, true),
+        eq(challenges.title, title!),
+      ),
+    )
     .limit(1);
   if (!c) throw new Error(`no accepted challenge "${title}"`);
   const at = localTime(p.zone, new Date(Date.now() + Number(ahead) * 60_000));

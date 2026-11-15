@@ -63,7 +63,12 @@ async function main() {
     const started = await call('/me/sessions', {
       method: 'POST',
       token,
-      body: JSON.stringify({ kind: 'walk', challengeId: walkId, date: today, data: { title: 'Morning walk' } }),
+      body: JSON.stringify({
+        kind: 'walk',
+        challengeId: walkId,
+        date: today,
+        data: { title: 'Morning walk' },
+      }),
     });
     assert.equal(started.status, 201, JSON.stringify(started.body));
     const id = started.body.id;
@@ -78,7 +83,16 @@ async function main() {
     const cp = await call(`/me/sessions/${id}`, {
       method: 'PATCH',
       token,
-      body: JSON.stringify({ data: { metres: 420, movingMs: 300000, path: [[77.1, 28.6], [77.101, 28.601]] } }),
+      body: JSON.stringify({
+        data: {
+          metres: 420,
+          movingMs: 300000,
+          path: [
+            [77.1, 28.6],
+            [77.101, 28.601],
+          ],
+        },
+      }),
     });
     assert.equal(cp.status, 200);
     assert.equal(cp.body.data.title, 'Morning walk', 'checkpoint merges, keeps the title');
@@ -90,7 +104,11 @@ async function main() {
     const done = await call(`/me/sessions/${id}/finish`, {
       method: 'POST',
       token,
-      body: JSON.stringify({ date: today, amount: 12, data: { metres: 1100, movingMs: 720000, steps: 1400, pauses: 2 } }),
+      body: JSON.stringify({
+        date: today,
+        amount: 12,
+        data: { metres: 1100, movingMs: 720000, steps: 1400, pauses: 2 },
+      }),
     });
     assert.equal(done.status, 200, JSON.stringify(done.body));
     assert.equal(done.body.amount, 12);
@@ -108,7 +126,9 @@ async function main() {
     const walk = after.body.challenges.find((c: { id: string }) => c.id === walkId);
     assert.equal(walk.progress.value, 12, 'challenge credited once');
     assert.equal(walk.session, null);
-    const act = after.body.burn.activities.find((a: { sessionId: string | null }) => a.sessionId === id);
+    const act = after.body.burn.activities.find(
+      (a: { sessionId: string | null }) => a.sessionId === id,
+    );
     assert.ok(act, 'activity links to the trophy');
 
     const trophy = await call(`/me/sessions/${id}`, { token });

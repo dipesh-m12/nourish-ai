@@ -30,7 +30,10 @@ async function main() {
     };
     console.log('1 →', await say('my knees hurt when I climb stairs'));
     const rows = await db.select().from(userSignals).where(eq(userSignals.profileId, profile.id));
-    console.log('remembered:', rows.map((r) => r.focus));
+    console.log(
+      'remembered:',
+      rows.map((r) => r.focus),
+    );
     console.log('2 →', await say('what should I do this evening?'));
   } finally {
     await db.update(profiles).set({ deletedAt: new Date() }).where(eq(profiles.id, profile.id));

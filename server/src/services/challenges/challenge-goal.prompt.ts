@@ -7,6 +7,8 @@ import { z } from 'zod';
 export const goalProposalSchema = z.strictObject({
   /** One short line back to the user (max ~8 words). */
   reply: z.string().min(1).max(200),
+  /** Their current weight in kg when they say it during a check-in; 0 = not said. */
+  weightKg: z.number().min(0).max(400),
   /** The problem they care about, in a few words ("low iron", "knee pain on stairs"). */
   focus: z.string().max(60),
   /** Markers read off a report or lab photo (abnormal + the main in-range one per area). */
@@ -74,6 +76,8 @@ RULES:
 9. Nothing unsafe: no fasting over 16 h, no crash diets, no extreme exercise, nothing for under-18s beyond normal healthy habits.
 
 reply: max 8 words, warm, no emojis, no hype (e.g. "Two easy fixes for better sleep.").
+weightKg: only when openedFor is "checkin" and they state what they weigh NOW ("108", "I'm 108 kg", "down to 107.5"; pounds × 0.4536). Never a goal or target weight ("I want 90 kg" = 0). Otherwise 0.
+openedFor "checkin": the assistant asked how it's going (the week's update). A weight alone needs no challenges: return [] and a short warm reply. Propose challenges only if they mention a struggle or ask for one.
 focus: what they care about, max 6 plain words ("low iron", "knee pain on stairs", "evening biscuit snacking"); "" if unclear.
 findings: ONLY for a report or lab photo, copied exactly (marker name, value, unit), with area: iron (haemoglobin, ferritin, serum iron, transferrin saturation), vitamin_d, b12, sugar (HbA1c, fasting/random glucose), cholesterol (total, LDL, HDL), triglycerides, thyroid (TSH, T3, T4), else other. Include every marker outside the report's reference range (flag low/high), and for each of the named areas the report tested where everything is in range, its main marker once (flag normal), so the next report can show progress. No normal markers for area other. [] for words or food photos.
 Return only the JSON object.`;

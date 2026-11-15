@@ -2,6 +2,11 @@ import { z } from 'zod';
 import { generateStructured } from '../ai/ai.service';
 import { buildContext, localClock } from '../agent/agent.context';
 import { levelUpFor } from '../challenges/level';
+import { signalsService } from '../priorities/signals.service';
+import { db } from '../../db';
+import { profiles } from '../../db/schema';
+import { eq } from 'drizzle-orm';
+import { addDays } from '../../utils/dates';
 import { buildBriefing, type BriefingInput } from './briefing.rules';
 
 /**
@@ -18,6 +23,8 @@ Given today's advice, the user's own reason for their goal, and what they've sai
 Rules: no numbers, no medical claims, no promises of results, no emojis, no quotes. Same language as the input.`;
 
 const REWRITE_TIMEOUT_MS = 6000;
+/** Goals whose outcome is the scale: the PA asks for a weekly weigh-in. */
+const WEIGHT_GOALS = new Set(['lose_weight', 'gain_muscle']);
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const CACHE_MAX = 500;
 
@@ -95,8 +102,22 @@ export const briefingService = {
 
   /** Rules only, no AI call: what push nudges use (cheap enough to run for every user). */
   async rulesFor(profileId: string, date: string, tz: number) {
-    const ctx = await buildContext(profileId, date, tz);
+    const [ctx, weighIns, profile] = await Promise.all([
+      buildContext(profileId, date, tz),
+      signalsService.weighIns(profileId, 1),
+      db.query.profiles.findFirst({
+        where: eq(profiles.id, profileId),
+        columns: { onboardedAt: true },
+      }),
+    ]);
     const today = ctx.raw;
+    // A weight goal: ask for the weight a week after the last weigh-in (or after they started).
+    const lastWeighed = weighIns[0]?.at ?? profile?.onboardedAt ?? null;
+    const localDay = (at: Date) => new Date(at.getTime() + tz * 60_000).toISOString().slice(0, 10);
+    const weighInDue =
+      WEIGHT_GOALS.has(ctx.prompt.goal.type) &&
+      lastWeighed !== null &&
+      localDay(lastWeighed) <= addDays(date, -7);
 
     const input: BriefingInput = {
       name: ctx.name,
@@ -110,6 +131,7 @@ export const briefingService = {
       sleepMinutes: today.burn.sleepMinutes,
       findings: ctx.priorities.findings,
       foods: today.meals.flatMap((m) => [m.title, ...m.items.map((it) => it.name)]),
+      weighInDue,
       suggestions: ctx.prompt.planChallenges
         .filter((c) => !c.accepted)
         .map(({ id, title, category, target, why }) => ({ id, title, category, target, why })),

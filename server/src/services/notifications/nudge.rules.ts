@@ -51,6 +51,8 @@ const MOMENTS: Partial<Record<BriefingKind, Moment>> = {
     title: 'Snap your plate',
   },
   water_behind: { key: () => 'water', hours: [11, 18], title: 'A glass of water?' },
+  // The weekly weigh-in: once, in the morning.
+  checkin: { key: () => 'checkin', hours: [8, 11], title: 'Quick check-in' },
   // From their own report: once a day, at a meal hour.
   priority: { key: () => 'priority', hours: [12, 21], title: 'From your report' },
   protein_short: { key: () => 'protein', hours: [15, 20], title: 'Stay full till dinner' },
@@ -78,6 +80,8 @@ export function urlFor(action: BriefingAction | undefined): string {
       return '/dashboard?open=goal';
     case 'level_up':
       return '/week';
+    case 'checkin':
+      return '/dashboard?open=goal&context=checkin';
   }
 }
 
