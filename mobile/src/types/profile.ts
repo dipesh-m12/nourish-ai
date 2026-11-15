@@ -19,6 +19,8 @@ export interface ProfileSummary {
   showAgent: boolean | null;
   /** Flexible per-profile settings (the server merges updates). */
   preferences: {
+    /** One-time hints already used ('garden'…). */
+    hintsSeen?: string[];
     /** Saw the assistant's how-it-works slides. */
     assistantIntroSeen?: boolean;
     /** Reminder consent by kind. Missing = not asked yet. */

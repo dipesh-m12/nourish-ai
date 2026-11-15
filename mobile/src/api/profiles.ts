@@ -121,6 +121,16 @@ export function useSetReminders() {
   });
 }
 
+/** A one-time hint was used: saved on the profile, so it never shows again (any device). */
+export function useMarkHintSeen() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (hintSeen: 'garden') =>
+      request<Profile>('/me/preferences', { method: 'PUT', body: { hintSeen } }),
+    onSuccess: (profile) => queryClient.setQueryData(queryKeys.me, profile),
+  });
+}
+
 /** "What's new" for this version was shown: don't show it again until the next one. */
 export function useMarkWhatsNewSeen() {
   const queryClient = useQueryClient();

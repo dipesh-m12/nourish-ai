@@ -8,7 +8,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useBriefing } from '@/api/briefing';
 import { type GoalContext, levelToast, useSetLevel } from '@/api/challenges';
 import { useAcceptChallenges, usePlan } from '@/api/plan';
-import { useMe, useSetShowAgent } from '@/api/profiles';
+import { useMarkHintSeen, useMe, useSetShowAgent } from '@/api/profiles';
 import { useToday } from '@/api/today';
 import { AgentIntroSheet } from '@/components/agent/agent-intro-sheet';
 import { AskNourishTag } from '@/components/agent/ask-nourish-tag';
@@ -86,6 +86,7 @@ export default function DashboardScreen() {
   const briefing = useBriefing(date, today.dataUpdatedAt);
   const celebrate = useCallback(() => setCelebrating(true), []);
   const setShowAgent = useSetShowAgent();
+  const markHint = useMarkHintSeen();
   const toast = useToast((s) => s.show);
   const insets = useSafeAreaInsets();
 
@@ -379,7 +380,14 @@ export default function DashboardScreen() {
 
         {challenges.length > 0 && (
           <View className="mb-3">
-            <ConsistencyCard challenges={challenges} />
+            <ConsistencyCard
+              challenges={challenges}
+              // A tap hint until they've opened their week once (saved on the profile).
+              hint={!profile.preferences.hintsSeen?.includes('garden')}
+              onOpen={() => {
+                if (!profile.preferences.hintsSeen?.includes('garden')) markHint.mutate('garden');
+              }}
+            />
           </View>
         )}
 

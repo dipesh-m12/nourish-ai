@@ -207,6 +207,8 @@ export const profileService = {
       preferences.assistantIntroSeen = input.assistantIntroSeen;
     }
     if (input.whatsNewSeen) preferences.whatsNewSeen = input.whatsNewSeen;
+    if (input.hintSeen && !preferences.hintsSeen?.includes(input.hintSeen))
+      preferences.hintsSeen = [...(preferences.hintsSeen ?? []), input.hintSeen];
     if (input.reminders) {
       preferences.reminders = { ...preferences.reminders, ...input.reminders };
     }

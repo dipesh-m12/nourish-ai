@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 import Animated, { FadeIn, ZoomIn, useReducedMotion } from 'react-native-reanimated';
+import { TapHint } from '@/components/ui/tap-hint';
 import { Text } from '@/components/ui/text';
 import { colors } from '@/constants/colors';
 import type { TodayChallenge } from '@/types/today';
@@ -47,7 +48,17 @@ function plantFor(d: DaySummary, isToday: boolean) {
  * The week as Mochi's garden instead of stats: seven plants, one line. Feeling first (the
  * reviewer's point: "any stats I have to put my mind on is not a PA").
  */
-export function ConsistencyCard({ challenges }: { challenges: TodayChallenge[] }) {
+export function ConsistencyCard({
+  challenges,
+  hint,
+  onOpen,
+}: {
+  challenges: TodayChallenge[];
+  /** Show the tap hint (until the card has been opened once). */
+  hint?: boolean;
+  /** Called on open, before navigating (marks the hint as used). */
+  onOpen?: () => void;
+}) {
   const days = summarise(challenges);
   const reduceMotion = useReducedMotion();
   if (!days.length) return null;
@@ -60,7 +71,10 @@ export function ConsistencyCard({ challenges }: { challenges: TodayChallenge[] }
   return (
     <Animated.View entering={FadeIn.duration(300)}>
       <Pressable
-        onPress={() => router.push('/week')}
+        onPress={() => {
+          onOpen?.();
+          router.push('/week');
+        }}
         className="rounded-3xl bg-card px-4 pb-3 pt-4 active:opacity-90"
         accessibilityRole="button"
         accessibilityLabel={`${full} of ${week.length} full days this week. Open the weekly check-in`}
@@ -103,6 +117,11 @@ export function ConsistencyCard({ challenges }: { challenges: TodayChallenge[] }
             );
           })}
         </View>
+        {hint && (
+          <View style={{ position: 'absolute', right: 6, bottom: 6 }}>
+            <TapHint />
+          </View>
+        )}
       </Pressable>
     </Animated.View>
   );

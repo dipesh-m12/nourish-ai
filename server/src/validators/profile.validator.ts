@@ -30,6 +30,8 @@ export const preferencesSchema = z
       .string()
       .regex(/^\d+\.\d+\.\d+$/)
       .optional(),
+    /** A one-time hint the user has now used (it stops showing). */
+    hintSeen: z.enum(['garden']).optional(),
   })
   .refine(
     (v) =>
@@ -37,7 +39,8 @@ export const preferencesSchema = z
       v.companion !== undefined ||
       v.assistantIntroSeen !== undefined ||
       v.reminders !== undefined ||
-      v.whatsNewSeen !== undefined,
+      v.whatsNewSeen !== undefined ||
+      v.hintSeen !== undefined,
     {
       message: 'Nothing to update',
     },
