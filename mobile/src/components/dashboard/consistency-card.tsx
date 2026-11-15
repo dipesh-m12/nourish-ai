@@ -118,7 +118,7 @@ export function ConsistencyCard({
           })}
         </View>
         {hint && (
-          <View style={{ position: 'absolute', right: 6, bottom: 6 }}>
+          <View style={{ position: 'absolute', right: 4, bottom: -2 }}>
             <TapHint />
           </View>
         )}
