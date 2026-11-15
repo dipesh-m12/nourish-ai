@@ -28,10 +28,11 @@ Notifications.setNotificationHandler({
  * when it's first created, so a new sound needs a new id; older channels are deleted. The
  * server sends to the same id (push.service.ts).
  */
-export const CHANNEL = 'nourish-chime';
+export const CHANNEL = 'nourish-chime-2';
 /** The bundled file's name (Android raw resource: lowercase, underscores). */
 export const CHIME = 'nourish_chime.wav';
-const OLD_CHANNELS = ['nudges', 'nourish-alerts', 'nourish-reminders'];
+// 'nourish-chime' was made by builds whose shrinker dropped the sound: stuck on the default.
+const OLD_CHANNELS = ['nudges', 'nourish-alerts', 'nourish-reminders', 'nourish-chime'];
 
 /**
  * The device's Expo push token, asking for permission once. null = no permission, emulator, or

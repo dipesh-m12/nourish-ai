@@ -67,10 +67,11 @@
         {
           "icon": "./assets/images/notification-icon.png",
           "color": "#1F7A55",
-          "defaultChannel": "nourish-chime",
+          "defaultChannel": "nourish-chime-2",
           "sounds": ["./assets/sounds/nourish_chime.wav"]
         }
       ],
+      ["./plugins/with-keep-sounds", { "sounds": ["nourish_chime"] }],
       [
         "expo-location",
         {
