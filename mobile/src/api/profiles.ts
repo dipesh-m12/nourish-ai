@@ -125,9 +125,13 @@ export function useSetReminders() {
 export function useMarkHintSeen() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (hintSeen: 'garden') =>
+    mutationFn: (hintSeen: 'garden' | 'reminders') =>
       request<Profile>('/me/preferences', { method: 'PUT', body: { hintSeen } }),
-    onSuccess: (profile) => queryClient.setQueryData(queryKeys.me, profile),
+    onSuccess: (profile, hint) => {
+      queryClient.setQueryData(queryKeys.me, profile);
+      // The briefing stops offering reminder times once they've been seen.
+      if (hint === 'reminders') void queryClient.invalidateQueries({ queryKey: ['briefing'] });
+    },
   });
 }
 

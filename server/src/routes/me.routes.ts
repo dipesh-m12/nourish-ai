@@ -88,6 +88,7 @@ router.put('/challenges/:id/sync', validateBody(syncProgressSchema), challengeCo
 
 // All reminders in one place: several at once, or said in words (AI plan → user confirms).
 router.post('/reminders/plan', validateBody(reminderPlanSchema), challengeController.planReminders);
+router.get('/reminders/suggest', challengeController.suggestReminders);
 router.put('/reminders', validateBody(setRemindersSchema), challengeController.setReminders);
 
 // Walks and timers that survive the app closing; finished walks are trophy cards.

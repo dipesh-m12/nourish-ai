@@ -107,7 +107,7 @@ export const briefingService = {
       signalsService.weighIns(profileId, 1),
       db.query.profiles.findFirst({
         where: eq(profiles.id, profileId),
-        columns: { onboardedAt: true },
+        columns: { onboardedAt: true, preferences: true },
       }),
     ]);
     const today = ctx.raw;
@@ -118,6 +118,13 @@ export const briefingService = {
       WEIGHT_GOALS.has(ctx.prompt.goal.type) &&
       lastWeighed !== null &&
       localDay(lastWeighed) <= addDays(date, -7);
+
+    // Never set a reminder and never shown the suggested times: the PA offers them once.
+    const prefs = profile?.preferences ?? {};
+    const remindersDue =
+      !prefs.hintsSeen?.includes('reminders') &&
+      !prefs.reminders?.water &&
+      today.challenges.every((c) => !c.remindAt);
 
     const input: BriefingInput = {
       name: ctx.name,
@@ -132,6 +139,7 @@ export const briefingService = {
       findings: ctx.priorities.findings,
       foods: today.meals.flatMap((m) => [m.title, ...m.items.map((it) => it.name)]),
       weighInDue,
+      remindersDue,
       suggestions: ctx.prompt.planChallenges
         .filter((c) => !c.accepted)
         .map(({ id, title, category, target, why }) => ({ id, title, category, target, why })),

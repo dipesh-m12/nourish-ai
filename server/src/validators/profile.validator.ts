@@ -31,7 +31,7 @@ export const preferencesSchema = z
       .regex(/^\d+\.\d+\.\d+$/)
       .optional(),
     /** A one-time hint the user has now used (it stops showing). */
-    hintSeen: z.enum(['garden']).optional(),
+    hintSeen: z.enum(['garden', 'reminders']).optional(),
   })
   .refine(
     (v) =>

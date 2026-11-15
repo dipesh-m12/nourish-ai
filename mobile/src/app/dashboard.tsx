@@ -77,6 +77,8 @@ export default function DashboardScreen() {
   const [goalOpen, setGoalOpen] = useState(false);
   const [goalContext, setGoalContext] = useState<GoalContext | undefined>();
   const [remindersOpen, setRemindersOpen] = useState(false);
+  /** Opened with times already picked (the PA's offer or a nudge link with suggest=1). */
+  const [remindersSuggest, setRemindersSuggest] = useState(false);
   const [menuFor, setMenuFor] = useState<TodayChallenge | null>(null);
   const [logFor, setLogFor] = useState<TodayChallenge | null>(null);
   const [mealFor, setMealFor] = useState<MealSheetRequest | null>(null);
@@ -184,6 +186,10 @@ export default function DashboardScreen() {
       setGoalContext('checkin');
       return setGoalOpen(true);
     }
+    if (a.kind === 'reminders') {
+      setRemindersSuggest(true);
+      return setRemindersOpen(true);
+    }
     if (a.kind === 'level_up')
       return setLevel.mutate(
         { id: a.challengeId, date, direction: 'up' },
@@ -196,7 +202,8 @@ export default function DashboardScreen() {
   // A tapped nudge lands here with what to open:
   // /dashboard?open=meal | open=goal | open=reminders | open=challenge&id=… (other screens are their own routes).
   // The sheet is derived from the link (no extra state); closing it clears the link.
-  const { open, id, context } = useLocalSearchParams<{
+  const { open, id, context, suggest } = useLocalSearchParams<{
+    suggest?: string;
     open?: string;
     id?: string;
     context?: string;
@@ -210,7 +217,8 @@ export default function DashboardScreen() {
         : null;
   const linkedLog = linked && linked.logsVia !== 'meal' ? linked : null;
   const clearLink = () => {
-    if (open) router.setParams({ open: undefined, id: undefined, context: undefined });
+    if (open)
+      router.setParams({ open: undefined, id: undefined, context: undefined, suggest: undefined });
   };
   // A link to a challenge that has since ended: drop it quietly once the day has loaded.
   const deadLink = open === 'challenge' && !!today.data && !linked;
@@ -438,8 +446,10 @@ export default function DashboardScreen() {
       <RemindersSheet
         visible={remindersOpen || open === 'reminders'}
         date={date}
+        suggest={remindersSuggest || (open === 'reminders' && suggest === '1')}
         onClose={() => {
           setRemindersOpen(false);
+          setRemindersSuggest(false);
           clearLink();
         }}
       />

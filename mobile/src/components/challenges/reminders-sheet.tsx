@@ -3,8 +3,13 @@ import { ArrowUp, Check, Droplets, Minus } from 'lucide-react-native';
 import { useState } from 'react';
 import { Platform, Pressable, Switch, TextInput, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
-import { type ReminderPlan, useReminderPlan, useSaveReminders } from '@/api/challenges';
-import { useMe } from '@/api/profiles';
+import {
+  type ReminderPlan,
+  useReminderPlan,
+  useSaveReminders,
+  useSuggestedReminders,
+} from '@/api/challenges';
+import { useMarkHintSeen, useMe } from '@/api/profiles';
 import { useToday } from '@/api/today';
 import { Button } from '@/components/ui/button';
 import { DraggableSheet } from '@/components/ui/draggable-sheet';
@@ -26,15 +31,18 @@ interface Props {
   visible: boolean;
   date: string;
   onClose: () => void;
+  /** Open with a time already picked for each habit (the PA's offer): one tap sets them all. */
+  suggest?: boolean;
 }
 
 /**
  * Every reminder in one sheet (opened from the dashboard, Profile and the assistant):
  * - say it ("walk at 7, water every morning, no sleep one") → the AI plans it → confirm;
  * - or tick challenges (or all) and give them one time, or turn them off;
- * - tap a time to change just that one.
+ * - tap a time to change just that one;
+ * - opened with `suggest`, it starts on a plan the app picked, so the user only confirms.
  */
-export function RemindersSheet({ visible, date, onClose }: Props) {
+export function RemindersSheet({ visible, date, onClose, suggest = false }: Props) {
   const today = useToday(date);
   const me = useMe();
   const save = useSaveReminders();
@@ -42,16 +50,29 @@ export function RemindersSheet({ visible, date, onClose }: Props) {
   const toast = useToast((s) => s.show);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [text, setText] = useState('');
-  const [plan, setPlan] = useState<ReminderPlan | null>(null);
+  const [edited, setPlan] = useState<ReminderPlan | null>(null);
+  /** "I'll pick myself": leave the suggested plan for the normal list. */
+  const [ownWay, setOwnWay] = useState(false);
+  const suggested = useSuggestedReminders(date, visible && suggest);
+  const markHint = useMarkHintSeen();
+  const offer = suggested.data;
+  const hasOffer = !!offer && (offer.changes.length > 0 || offer.water !== null);
+  // The suggestion shows until the user edits it (then their copy) or chooses their own way.
+  const plan = edited ?? (suggest && !ownWay && hasOffer ? offer : null);
+  const fromSuggestion = suggest && !ownWay;
 
   const challenges = today.data?.challenges ?? [];
   const water = me.data?.preferences.reminders?.water === true;
   const allOn = challenges.length > 0 && selected.size === challenges.length;
 
   const close = () => {
+    // Seen once is enough: the PA won't offer the times again.
+    if (suggest && !me.data?.preferences.hintsSeen?.includes('reminders'))
+      markHint.mutate('reminders');
     setSelected(new Set());
     setText('');
     setPlan(null);
+    setOwnWay(false);
     planner.reset();
     onClose();
   };
@@ -126,10 +147,25 @@ export function RemindersSheet({ visible, date, onClose }: Props) {
     )
       .then(() => {
         toast('Reminders set');
+        if (fromSuggestion) return close();
         setPlan(null);
         setText('');
       })
       .catch((e: Error) => toast(e.message));
+  };
+
+  /** Tap a time in the plan to change it before confirming. */
+  const changePlanned = async (id: string) => {
+    if (!plan) return;
+    const current = plan.changes.find((c) => c.id === id)?.remindAt ?? '08:00';
+    const [h, m] = current.split(':').map(Number);
+    const picked = await pickTime(h!, m!);
+    if (!picked) return;
+    const remindAt = toHHMM(picked);
+    setPlan({
+      ...plan,
+      changes: plan.changes.map((c) => (c.id === id ? { ...c, remindAt } : c)),
+    });
   };
 
   // Two challenges with the same name ("Water" twice): add the target to tell them apart.
@@ -147,7 +183,14 @@ export function RemindersSheet({ visible, date, onClose }: Props) {
   const footer = plan ? (
     <View className="gap-2">
       <Button label="Set these" onPress={confirmPlan} loading={save.isPending} />
-      <Button variant="ghost" label="Change what I said" onPress={() => setPlan(null)} />
+      <Button
+        variant="ghost"
+        label={fromSuggestion ? 'I’ll pick myself' : 'Change what I said'}
+        onPress={() => {
+          setPlan(null);
+          if (fromSuggestion) setOwnWay(true);
+        }}
+      />
     </View>
   ) : ids.length > 0 ? (
     <View className="flex-row gap-3">
@@ -175,7 +218,9 @@ export function RemindersSheet({ visible, date, onClose }: Props) {
       title={plan ? 'Look right?' : 'Reminders'}
       footer={footer}
     >
-      {plan ? (
+      {suggest && !ownWay && suggested.isPending ? (
+        <SkeletonBlock className="h-40 rounded-2xl" />
+      ) : plan ? (
         <Animated.View entering={FadeIn.duration(220)} className="gap-3">
           <Text className="text-muted">{plan.reply}</Text>
           <View className="overflow-hidden rounded-2xl bg-card">
@@ -191,7 +236,11 @@ export function RemindersSheet({ visible, date, onClose }: Props) {
                 <Text className="flex-1 font-sans-semibold" numberOfLines={1}>
                   {c.title}
                 </Text>
-                <TimePill value={c.remindAt} />
+                <TimePill
+                  value={c.remindAt}
+                  label={c.title}
+                  onPress={Platform.OS === 'web' ? undefined : () => void changePlanned(c.id)}
+                />
               </Animated.View>
             ))}
             {plan.water !== null && (

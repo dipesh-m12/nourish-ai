@@ -82,6 +82,8 @@ export function urlFor(action: BriefingAction | undefined): string {
       return '/week';
     case 'checkin':
       return '/dashboard?open=goal&context=checkin';
+    case 'reminders':
+      return '/dashboard?open=reminders&suggest=1';
   }
 }
 

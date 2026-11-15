@@ -5,6 +5,7 @@ import { challenges, profiles } from '../../db/schema';
 import { AppError } from '../../utils/app-error';
 import { generateStructured } from '../ai/ai.service';
 import { activeChallenges } from '../challenges/active';
+import { suggestReminders } from './reminder-suggest.rules';
 
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -83,6 +84,28 @@ export const reminderPlanService = {
       changes: [...byId.values()],
       water: data.water === 'same' ? null : data.water === 'on',
     };
+  },
+
+  /** A time for each daily habit with no reminder yet, for the user to confirm (no AI). */
+  async suggest(profileId: string, date: string) {
+    const [list, [p]] = await Promise.all([
+      db
+        .select({
+          id: challenges.id,
+          title: challenges.title,
+          category: challenges.category,
+          frequency: challenges.frequency,
+          remindAt: challenges.remindAt,
+        })
+        .from(challenges)
+        .where(activeChallenges(profileId, date))
+        .orderBy(challenges.createdAt),
+      db
+        .select({ preferences: profiles.preferences })
+        .from(profiles)
+        .where(eq(profiles.id, profileId)),
+    ]);
+    return suggestReminders(list, p?.preferences.reminders?.water === true);
   },
 
   /** Many at once (select all → one time, or a confirmed AI plan). Only the user's own. */

@@ -74,6 +74,7 @@ describe('the PA offers it', () => {
       foods: [],
       suggestions: [],
       weighInDue: false,
+      remindersDue: false,
       challenges: [
         {
           id: 'w',

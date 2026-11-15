@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { request } from '@/lib/api-client';
 import { AI_TIMEOUT_MS } from '@/lib/api-config';
 import type { Photo } from '@/lib/photo';
@@ -133,6 +133,17 @@ export function useReminderPlan() {
         body,
         timeoutMs: AI_TIMEOUT_MS,
       }),
+  });
+}
+
+/** A time picked for each habit with no reminder yet (rules, no AI), shown to confirm. */
+export function useSuggestedReminders(date: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['reminders-suggest', date],
+    queryFn: () => request<ReminderPlan>(`/me/reminders/suggest?date=${date}`),
+    enabled,
+    staleTime: 0,
+    gcTime: 0,
   });
 }
 

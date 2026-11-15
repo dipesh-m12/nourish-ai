@@ -21,6 +21,7 @@ export type BriefingKind =
   | 'suggest'
   | 'level_up'
   | 'checkin'
+  | 'reminders'
   | 'on_track';
 
 export type BriefingAction =
@@ -32,7 +33,9 @@ export type BriefingAction =
   /** Raise a challenge's goal one step, from today. */
   | { kind: 'level_up'; label: string; challengeId: string }
   /** Open the "+" sheet as a check-in: the AI knows it's a progress update (weight…). */
-  | { kind: 'checkin'; label: string };
+  | { kind: 'checkin'; label: string }
+  /** Open the reminders sheet with times already picked: one tap to confirm. */
+  | { kind: 'reminders'; label: string };
 
 export interface BriefingChallenge {
   id: string;
@@ -71,6 +74,8 @@ export interface BriefingInput {
   suggestions: Suggestion[];
   /** A weight goal and a week since the last weigh-in (or since they started): ask for it. */
   weighInDue: boolean;
+  /** Daily habits running, no reminder set on any, and the offer not seen yet. */
+  remindersDue: boolean;
 }
 
 /** A plan idea the PA offers; the card shows it as a row that opens to its why and "Add it". */
@@ -253,6 +258,18 @@ export function buildBriefing(i: BriefingInput): Briefing {
       headline: 'How did you sleep? Log last night in one tap.',
       actions: [{ kind: 'log_challenge', label: `Log ${sleep.label}`, challengeId: sleep.id }],
       why: why('Good sleep makes the rest of the day easier.'),
+      facts: {},
+    };
+  }
+
+  // 2¼. Habits with no reminders at all: offer times already picked (once; one tap to set).
+  if (i.remindersDue && daily.length > 0 && i.hour >= 8 && i.hour < 21) {
+    return {
+      ...base,
+      kind: 'reminders',
+      headline: 'Want a nudge for each habit? I picked the times.',
+      actions: [{ kind: 'reminders', label: 'See times' }],
+      why: why('A nudge at the right moment makes it easy.'),
       facts: {},
     };
   }

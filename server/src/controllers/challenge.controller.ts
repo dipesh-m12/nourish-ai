@@ -7,7 +7,11 @@ import { challengeProgressService } from '../services/challenges/challenge-progr
 import { nudgeService } from '../services/notifications/nudge.service';
 import { reminderPlanService } from '../services/reminders/reminder-plan.service';
 import { AppError } from '../utils/app-error';
-import { challengeIdParamSchema, todayQuerySchema } from '../validators/challenge.validator';
+import {
+  challengeIdParamSchema,
+  localDate,
+  todayQuerySchema,
+} from '../validators/challenge.validator';
 
 function parse<T extends z.ZodType>(schema: T, input: unknown): z.output<T> {
   const result = schema.safeParse(input);
@@ -31,6 +35,12 @@ export const challengeController = {
   /** AI reads "walk at 7, water every morning" → changes for the app to confirm. Saves nothing. */
   async planReminders(req: Request, res: Response) {
     res.json(await reminderPlanService.plan(authedProfileId(req), req.body.date, req.body.text));
+  },
+
+  /** Ready-made times for habits without a reminder: the app shows them to confirm. */
+  async suggestReminders(req: Request, res: Response) {
+    const { date } = parse(z.object({ date: localDate }), req.query);
+    res.json(await reminderPlanService.suggest(authedProfileId(req), date));
   },
 
   async setReminders(req: Request, res: Response) {

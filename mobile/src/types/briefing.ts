@@ -9,7 +9,9 @@ export type BriefingAction =
   /** Raise a challenge's goal one step, from today. */
   | { kind: 'level_up'; label: string; challengeId: string }
   /** Open the "+" sheet as a check-in (the AI knows it's a progress update). */
-  | { kind: 'checkin'; label: string };
+  | { kind: 'checkin'; label: string }
+  /** Open the reminders sheet with times already picked: one tap to set them. */
+  | { kind: 'reminders'; label: string };
 
 export interface Briefing {
   kind:
@@ -26,6 +28,7 @@ export interface Briefing {
     | 'suggest'
     | 'level_up'
     | 'checkin'
+    | 'reminders'
     | 'on_track';
   greeting: string;
   /** The one thing that matters now (rule-written, exact numbers). */

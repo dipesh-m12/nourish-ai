@@ -36,6 +36,7 @@ const base: BriefingInput = {
   foods: ['poha'],
   suggestions: [],
   weighInDue: false,
+  remindersDue: false,
 };
 
 describe('briefing actions always point at something real', () => {
@@ -140,6 +141,15 @@ describe('briefing actions always point at something real', () => {
     const b = buildBriefing({ ...base, weighInDue: true });
     assert.equal(b.kind, 'checkin');
     assert.deepEqual(b.actions[0], { kind: 'checkin', label: 'Log it' });
+  });
+
+  it('habits with no reminders: offers picked times once, in waking hours', () => {
+    const due = { ...base, remindersDue: true, challenges: [challenge({})] };
+    const b = buildBriefing({ ...due, hour: 10 });
+    assert.equal(b.kind, 'reminders');
+    assert.deepEqual(b.actions[0], { kind: 'reminders', label: 'See times' });
+    assert.notEqual(buildBriefing({ ...due, hour: 21 }).kind, 'reminders');
+    assert.notEqual(buildBriefing({ ...due, challenges: [] }).kind, 'reminders');
   });
 
   it('the morning after a perfect week: offers the step up before today is done', () => {

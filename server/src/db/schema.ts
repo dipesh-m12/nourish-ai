@@ -56,7 +56,7 @@ export interface Preferences {
   reminders?: { water?: boolean };
   /** Last app version whose "What's new" page was shown (shown once per version). */
   whatsNewSeen?: string;
-  /** One-time hints already used (e.g. 'garden' = tapped the week's garden once). */
+  /** One-time hints used ('garden' = opened the week once, 'reminders' = saw the suggested times). */
   hintsSeen?: string[];
   /**
    * Mochi's room (services/companion/room.rules.ts): items unlocked by good weeks. Kept apart
