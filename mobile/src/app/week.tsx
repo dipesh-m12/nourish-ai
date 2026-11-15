@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import { ArrowDown, ArrowUp, Check, ChevronLeft, Minus } from 'lucide-react-native';
+import { Check, ChevronLeft } from 'lucide-react-native';
 import { type ComponentRef, useRef } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
@@ -160,25 +160,36 @@ export default function WeekScreen() {
   );
 }
 
+/**
+ * Stocks-style: the label, this week's value, and the move since last week as a small coloured
+ * pill (green = the right way, coral = not). The sign says which way it moved; the colour says
+ * whether that's good (fewer calories can be green).
+ */
 function StatRow({ stat: s, first }: { stat: WeekStat; first: boolean }) {
-  const Icon = s.better === null ? null : s.better ? ArrowUp : ArrowDown;
-  const tint = s.better ? colors.primary : colors.accent;
+  const good = s.better === true;
   return (
     <View
-      className={`flex-row items-center px-4 py-3.5 ${first ? '' : 'border-t border-line'}`}
+      className={`flex-row items-center gap-3 px-4 py-3.5 ${first ? '' : 'border-t border-line'}`}
       accessible
       accessibilityLabel={`${s.label}: ${s.now}${s.before ? `, last week ${s.before}` : ''}${
-        s.better === null ? '' : s.better ? ', better' : ', lower'
+        s.better === null ? '' : s.better ? ', better' : ', worse'
       }`}
     >
       <Text className="flex-1 text-muted">{s.label}</Text>
-      {s.before && <Text className="mr-3 text-sm text-muted">{s.before} →</Text>}
       <Text className="font-sans-semibold text-base">{s.now}</Text>
-      <View className="ml-2 w-5 items-end">
-        {Icon ? (
-          <Icon size={16} color={tint} strokeWidth={2.5} />
-        ) : (
-          <Minus size={14} color={colors.line} />
+      {/* Fixed width so the values line up like a ticker column. */}
+      <View className="w-16 items-end">
+        {s.change && (
+          <View
+            className={`rounded-full px-2 py-0.5 ${good ? 'bg-primary-soft' : 'bg-accent-soft'}`}
+          >
+            <Text
+              className="font-sans-semibold text-xs"
+              style={{ color: good ? colors.primary : colors.accentText }}
+            >
+              {s.change}
+            </Text>
+          </View>
         )}
       </View>
     </View>
@@ -204,9 +215,12 @@ function MarkerRow({ marker: m, first }: { marker: MarkerTrend; first: boolean }
     >
       <View className="flex-1">
         <Text className="font-sans-semibold">{m.label}</Text>
-        <Text className="text-xs text-muted">for {m.feel}</Text>
+        {/* Where it was sits quietly under the name; the chip says where it is now. */}
+        <Text className="text-xs text-muted">
+          for {m.feel}
+          {changed ? ` · was ${FLAG[m.before!].toLowerCase()}` : ''}
+        </Text>
       </View>
-      {changed && <Text className="mr-2 text-sm text-muted">{FLAG[m.before!]} →</Text>}
       <View
         className={`h-7 flex-row items-center gap-1 rounded-full px-2.5 ${
           ok ? 'bg-primary-soft' : 'bg-accent-soft'

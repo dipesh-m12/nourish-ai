@@ -56,6 +56,8 @@ export interface WeekStat {
   before: string | null;
   /** Did it move the right way? null = no comparison yet. */
   better: boolean | null;
+  /** The move since last week, signed ("+43 g", "−1"); null = no comparison or no change. */
+  change: string | null;
 }
 
 export interface WeekReview {
@@ -70,6 +72,14 @@ export interface WeekReview {
 }
 
 const round = (n: number, d = 0) => Math.round(n * 10 ** d) / 10 ** d;
+
+/** "+43 g", "−1", "+0.5 h"; null when there's nothing to compare or it didn't move. */
+function moved(now: number, before: number | null, unit = '', digits = 0): string | null {
+  if (before === null) return null;
+  const d = round(now - before, digits);
+  if (d === 0) return null;
+  return `${d > 0 ? '+' : '−'}${Math.abs(d)}${unit ? ` ${unit}` : ''}`;
+}
 
 /** How close to target (1 = on it). Over or under both count as off. */
 const kcalCloseness = (avg: number, target: number) =>
@@ -88,6 +98,7 @@ export function buildWeek(i: WeekInput): WeekReview {
       now: `${t.fullDays} of ${t.activeDays}`,
       before: l.activeDays ? `${l.fullDays} of ${l.activeDays}` : null,
       better: l.activeDays ? t.fullDays / t.activeDays >= l.fullDays / l.activeDays : null,
+      change: moved(t.fullDays, l.activeDays ? l.fullDays : null),
     });
   }
   if (t.loggedDays && i.targets.proteinG) {
@@ -100,6 +111,7 @@ export function buildWeek(i: WeekInput): WeekReview {
         ? Math.abs(t.avgProteinG - i.targets.proteinG) <=
           Math.abs(l.avgProteinG - i.targets.proteinG)
         : null,
+      change: moved(round(t.avgProteinG), l.loggedDays ? round(l.avgProteinG) : null, 'g'),
     });
   }
   if (t.activeMinutes || l.activeMinutes) {
@@ -109,6 +121,7 @@ export function buildWeek(i: WeekInput): WeekReview {
       now: `${t.activeMinutes} min`,
       before: first ? null : `${l.activeMinutes} min`,
       better: first ? null : t.activeMinutes >= l.activeMinutes,
+      change: moved(t.activeMinutes, first ? null : l.activeMinutes, 'min'),
     });
   }
   if (t.sleepNights) {
@@ -118,6 +131,7 @@ export function buildWeek(i: WeekInput): WeekReview {
       now: `${round(t.avgSleepH, 1)} h`,
       before: l.sleepNights ? `${round(l.avgSleepH, 1)} h` : null,
       better: l.sleepNights ? t.avgSleepH >= l.avgSleepH : null,
+      change: moved(round(t.avgSleepH, 1), l.sleepNights ? round(l.avgSleepH, 1) : null, 'h', 1),
     });
   }
   if (stats.length < 3 && t.loggedDays) {
@@ -130,6 +144,7 @@ export function buildWeek(i: WeekInput): WeekReview {
         ? kcalCloseness(t.avgKcal, i.targets.calories) >=
           kcalCloseness(l.avgKcal, i.targets.calories)
         : null,
+      change: moved(round(t.avgKcal), l.loggedDays ? round(l.avgKcal) : null),
     });
   }
 

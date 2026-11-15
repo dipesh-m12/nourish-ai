@@ -5,6 +5,8 @@ export interface WeekStat {
   now: string;
   before: string | null;
   better: boolean | null;
+  /** Signed move since last week ("+43 g", "−1"); null = nothing to compare or no change. */
+  change: string | null;
 }
 
 export interface WeekReview {
