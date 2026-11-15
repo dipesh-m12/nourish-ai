@@ -105,6 +105,9 @@ export const briefingService = {
       sleepMinutes: today.burn.sleepMinutes,
       findings: ctx.priorities.findings,
       foods: today.meals.flatMap((m) => [m.title, ...m.items.map((it) => it.name)]),
+      suggestions: ctx.prompt.planChallenges
+        .filter((c) => !c.accepted)
+        .map(({ id, title, category }) => ({ id, title, category })),
       challenges: today.challenges.map((c) => ({
         id: c.id,
         label: c.tracking.label ?? c.title,

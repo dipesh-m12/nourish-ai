@@ -21,8 +21,9 @@ export function openingNudge(ctx: AgentContext): Nudge {
   const today = ctx.raw;
   const name = ctx.name.split(' ')[0];
 
-  // Morning, and last night's sleep isn't logged yet.
-  if (part === 'morning' && today.burn.sleepMinutes === 0) {
+  // Morning, last night's sleep isn't logged, and there's a sleep challenge to log it on.
+  const sleep = today.challenges.find((c) => c.category === 'sleep' && !c.progress.done);
+  if (sleep && part === 'morning' && today.burn.sleepMinutes === 0) {
     return {
       text: `Good morning, ${name}! How long did you sleep last night?`,
       ask: { kind: 'number', unit: 'h', min: 3, max: 12, step: 0.5, initial: 7 },

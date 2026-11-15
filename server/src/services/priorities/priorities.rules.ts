@@ -136,7 +136,10 @@ export interface PriorityTip {
   /** What it does for them, felt not measured. */
   feel: string;
   action: 'log_meal' | 'ask';
+  /** For a habit tip: the ask that adds it as a challenge. */
   prompt?: string;
+  /** A challenge label that already does this habit (then the card logs that instead). */
+  habit?: RegExp;
 }
 
 const pick = (area: FindingArea, diet: string | null, allergies: string[]) =>
@@ -189,6 +192,7 @@ export function priorityTip(i: PriorityInput): PriorityTip | null {
       feel: 'more energy through the day',
       action: 'ask',
       prompt: 'Add a 15 minute morning sunlight walk to my challenges',
+      habit: /\b(sun|sunlight|morning walk)/i,
     };
 
   if (high('sugar') && i.hour >= 19 && i.hour < 23)
@@ -198,7 +202,8 @@ export function priorityTip(i: PriorityInput): PriorityTip | null {
         'To skip the sleepy slump, take a ten-minute walk after dinner. Your report showed high sugar.',
       feel: 'no heavy, sleepy feeling after meals',
       action: 'ask',
-      prompt: 'Log a 10 minute walk after dinner',
+      prompt: 'Add a 10 minute walk after dinner to my challenges',
+      habit: /\bwalk/i,
     };
 
   if ((high('cholesterol') || high('triglycerides')) && ate(i.foods, FRIED))

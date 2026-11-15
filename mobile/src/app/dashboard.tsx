@@ -6,6 +6,7 @@ import { ActivityIndicator, Pressable, RefreshControl, ScrollView, View } from '
 import Animated, { FadeInDown, LinearTransition } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBriefing } from '@/api/briefing';
+import { useAcceptChallenges, usePlan } from '@/api/plan';
 import { useMe, useSetShowAgent } from '@/api/profiles';
 import { useToday } from '@/api/today';
 import { AgentIntroSheet } from '@/components/agent/agent-intro-sheet';
@@ -153,11 +154,26 @@ export default function DashboardScreen() {
     setLogFor(c);
   };
 
+  // The PA's "Add it": starts one plan idea next to the ones already running.
+  const plan = usePlan();
+  const accept = useAcceptChallenges();
+  const addChallenge = (id: string) => {
+    const running = (plan.data?.challenges ?? []).filter((c) => c.accepted).map((c) => c.id);
+    accept.mutate([...running, id], {
+      onSuccess: () => {
+        void today.refetch();
+        toast('Added to your challenges');
+      },
+      onError: (err) => toast(err.message),
+    });
+  };
+
   /** Briefing actions do the work: open the camera, the right log sheet, or Nourish with the ask. */
   const runBriefingAction = (a: BriefingAction) => {
     if (a.kind === 'log_meal') return setMealFor({});
     if (a.kind === 'ask')
       return router.push({ pathname: '/assistant', params: { prompt: a.prompt } });
+    if (a.kind === 'add_challenge') return addChallenge(a.challengeId);
     const c = today.data?.challenges.find((x) => x.id === a.challengeId);
     if (c) logChallenge(c);
   };

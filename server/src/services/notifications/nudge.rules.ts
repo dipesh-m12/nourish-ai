@@ -74,6 +74,8 @@ export function urlFor(action: BriefingAction | undefined): string {
       return `/dashboard?open=challenge&id=${encodeURIComponent(action.challengeId)}`;
     case 'ask':
       return `/assistant?prompt=${encodeURIComponent(action.prompt)}`;
+    case 'add_challenge':
+      return '/dashboard?open=goal';
   }
 }
 

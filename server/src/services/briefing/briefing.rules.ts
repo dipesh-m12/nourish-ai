@@ -18,12 +18,15 @@ export type BriefingKind =
   | 'water_behind'
   | 'streak_risk'
   | 'open_challenges'
+  | 'suggest'
   | 'on_track';
 
 export type BriefingAction =
   | { kind: 'log_meal'; label: string }
   | { kind: 'log_challenge'; label: string; challengeId: string }
-  | { kind: 'ask'; label: string; prompt: string };
+  | { kind: 'ask'; label: string; prompt: string }
+  /** Start one of the plan's ideas (it isn't running yet). */
+  | { kind: 'add_challenge'; label: string; challengeId: string };
 
 export interface BriefingChallenge {
   id: string;
@@ -56,6 +59,8 @@ export interface BriefingInput {
   findings: ReportFinding[];
   /** Everything eaten today, by name. */
   foods: string[];
+  /** The plan's ideas the user hasn't started, best first. */
+  suggestions: { id: string; title: string; category: string }[];
 }
 
 export interface Briefing {
@@ -108,6 +113,8 @@ const greet = (hour: number, name: string) => {
 };
 
 /** 0 → 1 across the waking day: how much of a daily target "should" be done by now. */
+/** Past this many daily habits, the PA stops offering new ones (more isn't better). */
+const MAX_TO_SUGGEST = 3;
 /** Night: from 23:00 to 05:00 the card only says rest. */
 const NIGHT_FROM = 23;
 const NIGHT_TO = 5;
@@ -151,17 +158,28 @@ export function buildBriefing(i: BriefingInput): Briefing {
   // Fallback wording; the AI rewrite blends the lead and their own words into one line.
   const why = (lead: string) => `${lead} You said: “${i.why}”.`;
 
+  // A plan idea from an area they don't cover yet: what the PA offers when there's room for it.
+  const idea = i.suggestions.find((s) => !i.challenges.some((c) => c.category === s.category));
+
   // 1. Everything done and calories in range: celebrate. In the evening with lots of room left,
-  //    the celebration also makes sure they actually eat (undereating isn't the goal).
+  //    the celebration also makes sure they actually eat (undereating isn't the goal). With few
+  //    habits running, it offers one more from an area they don't cover yet.
   if (daily.length > 0 && open.length === 0 && left >= 0) {
     const bigGap = i.hour >= 17 && left > BIG_GAP_KCAL;
+    const oneMore = !bigGap && idea && daily.length < MAX_TO_SUGGEST ? idea : null;
     return {
       ...base,
       kind: 'all_done',
       headline: bigGap
         ? `Every challenge done today. You still have ${left} kcal: make dinner a proper one, with ${proteinIdeas(i.diet, i.allergies)[0] ?? 'protein'}.`
-        : `Every challenge done today, and ${left} kcal still in hand. That's a full day.`,
-      actions: bigGap ? [{ kind: 'log_meal', label: 'Log dinner' }] : [],
+        : oneMore
+          ? `Every challenge done today. Ready for one more: “${oneMore.title}”?`
+          : `Every challenge done today, and ${left} kcal still in hand. That's a full day.`,
+      actions: bigGap
+        ? [{ kind: 'log_meal', label: 'Log dinner' }]
+        : oneMore
+          ? [{ kind: 'add_challenge', label: 'Add it', challengeId: oneMore.id }]
+          : [],
       why: why('This is what it looks like.'),
       facts: { left },
     };
@@ -179,13 +197,15 @@ export function buildBriefing(i: BriefingInput): Briefing {
     };
   }
 
-  // 2. Morning, last night's sleep not logged.
-  if (i.hour >= 5 && i.hour < 12 && i.sleepMinutes === 0) {
+  // 2. Morning, last night's sleep not logged, and they have a sleep challenge to log it on.
+  //    No sleep challenge = nothing to log: the PA doesn't ask for data it won't use.
+  const sleep = daily.find((c) => c.category === 'sleep' && !c.done);
+  if (sleep && i.hour >= 5 && i.hour < 12 && i.sleepMinutes === 0) {
     return {
       ...base,
       kind: 'sleep',
-      headline: 'How did you sleep? Tell me and I’ll log it.',
-      actions: [{ kind: 'ask', label: 'Log my sleep', prompt: 'Log my sleep from last night' }],
+      headline: 'How did you sleep? Log last night in one tap.',
+      actions: [{ kind: 'log_challenge', label: `Log ${sleep.label}`, challengeId: sleep.id }],
       why: why('Good sleep makes the rest of the day easier.'),
       facts: {},
     };
@@ -246,7 +266,10 @@ export function buildBriefing(i: BriefingInput): Briefing {
     findings: i.findings,
     foods: i.foods,
   });
-  if (tip) {
+  // A habit tip goes through their own challenge for it when they have one: done today = the
+  // tip is covered (stay quiet); open = log it; none = offer to add it.
+  const habit = tip?.habit ? daily.find((c) => tip.habit!.test(c.label)) : undefined;
+  if (tip && !habit?.done) {
     return {
       ...base,
       kind: 'priority',
@@ -254,7 +277,9 @@ export function buildBriefing(i: BriefingInput): Briefing {
       actions:
         tip.action === 'log_meal'
           ? [{ kind: 'log_meal', label: 'Log a meal' }]
-          : [{ kind: 'ask', label: 'Do it', prompt: tip.prompt! }],
+          : habit
+            ? [{ kind: 'log_challenge', label: `Log ${habit.label}`, challengeId: habit.id }]
+            : [{ kind: 'ask', label: 'Add it', prompt: tip.prompt! }],
       why: why(`${cap(tip.feel)}.`),
       facts: { area: tip.area },
     };
@@ -330,7 +355,19 @@ export function buildBriefing(i: BriefingInput): Briefing {
     };
   }
 
-  // 10. On track.
+  // 10. No daily habit to work on: propose one plan idea from an area they don't cover yet.
+  if (idea && i.hour >= 8) {
+    return {
+      ...base,
+      kind: 'suggest',
+      headline: `All good for now. Want to add “${idea.title}”?`,
+      actions: [{ kind: 'add_challenge', label: 'Add it', challengeId: idea.id }],
+      why: why('One small habit at a time adds up.'),
+      facts: { left },
+    };
+  }
+
+  // 11. On track.
   return {
     ...base,
     kind: 'on_track',
