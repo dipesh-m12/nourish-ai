@@ -9,7 +9,7 @@ import { Heading, Text } from '@/components/ui/text';
 import { colors } from '@/constants/colors';
 import { WHATS_NEW } from '@/constants/whats-new';
 
-/** What changed in this version: four points, one line each, then back to the day. */
+/** What changed in this version: a few points, one line each, then back to the day. */
 export default function WhatsNewScreen() {
   const markSeen = useMarkWhatsNewSeen();
   const reduceMotion = useReducedMotion();
