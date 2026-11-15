@@ -68,14 +68,17 @@ export const briefingService = {
   /** The card for the dashboard: rules + the AI's personal "why" line. */
   async forDay(profileId: string, date: string, tz: number) {
     const { rules, input, focuses } = await this.rulesFor(profileId, date, tz);
-    const why = await personalWhy(
-      rules.headline,
-      rules.kind,
-      input.why,
-      focuses,
-      // Same advice + same priorities = same line (no new AI call).
-      `${profileId}:${rules.kind}:${rules.headline}:${focuses.join('|')}:${input.why}`,
-    );
+    // An offer carries its own why (in the row); no extra AI line on top of it.
+    const why = rules.suggestion
+      ? null
+      : await personalWhy(
+          rules.headline,
+          rules.kind,
+          input.why,
+          focuses,
+          // Same advice + same priorities = same line (no new AI call).
+          `${profileId}:${rules.kind}:${rules.headline}:${focuses.join('|')}:${input.why}`,
+        );
 
     return {
       kind: rules.kind,
@@ -84,6 +87,7 @@ export const briefingService = {
       why: why ?? rules.why,
       week: rules.week,
       actions: rules.actions,
+      suggestion: rules.suggestion,
       /** "ai" when the personal line was written by the model; "rules" when the fallback stood. */
       voice: why ? ('ai' as const) : ('rules' as const),
     };
@@ -108,7 +112,7 @@ export const briefingService = {
       foods: today.meals.flatMap((m) => [m.title, ...m.items.map((it) => it.name)]),
       suggestions: ctx.prompt.planChallenges
         .filter((c) => !c.accepted)
-        .map(({ id, title, category }) => ({ id, title, category })),
+        .map(({ id, title, category, target, why }) => ({ id, title, category, target, why })),
       challenges: today.challenges.map((c) => ({
         id: c.id,
         label: c.tracking.label ?? c.title,

@@ -89,12 +89,25 @@ describe('briefing actions always point at something real', () => {
         challenge({ id: 'c2', label: 'Steps', done: false, frequency: 'weekly' }),
       ],
       suggestions: [
-        { id: 'p1', title: 'Evening stretch', category: 'movement' },
-        { id: 'p2', title: 'Phone away by 10:30', category: 'sleep' },
+        {
+          id: 'p1',
+          title: 'Evening stretch',
+          category: 'movement',
+          target: '10 min',
+          why: 'looser back',
+        },
+        {
+          id: 'p2',
+          title: 'Phone away by 10:30',
+          category: 'sleep',
+          target: 'daily',
+          why: 'wake up fresh',
+        },
       ],
     });
     assert.equal(b.kind, 'all_done');
-    assert.deepEqual(b.actions[0], { kind: 'add_challenge', label: 'Add it', challengeId: 'p2' });
+    assert.equal(b.suggestion?.id, 'p2');
+    assert.doesNotMatch(b.headline, /Phone away/); // the idea lives in the row, not the headline
   });
 
   it('no daily habit at all: suggests one', () => {
@@ -103,7 +116,15 @@ describe('briefing actions always point at something real', () => {
       hour: 18,
       mealHours: [8, 13],
       eaten: { calories: 1200, proteinG: 60 },
-      suggestions: [{ id: 'p1', title: 'Evening stretch', category: 'movement' }],
+      suggestions: [
+        {
+          id: 'p1',
+          title: 'Evening stretch',
+          category: 'movement',
+          target: '10 min',
+          why: 'looser back',
+        },
+      ],
     });
     assert.equal(b.kind, 'suggest');
   });

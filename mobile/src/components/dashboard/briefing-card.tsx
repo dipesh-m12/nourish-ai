@@ -1,10 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
-import { ArrowRight, PawPrint } from 'lucide-react-native';
-import { useEffect } from 'react';
+import { ArrowRight, ChevronDown, PawPrint } from 'lucide-react-native';
+import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown, LinearTransition } from 'react-native-reanimated';
 import { CatFace } from '@/components/companion/cat-face';
+import { Button } from '@/components/ui/button';
 import { PressableScale } from '@/components/ui/pressable-scale';
 import { SkeletonBlock, SkeletonGroup } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
@@ -82,11 +83,20 @@ export function BriefingCard({
         </Text>
         {/* The WHY, as a feeling tied to their own reason ("strong enough to keep up with your
             son"): the line that makes it their assistant, not a tracker. Quiet and short. */}
-        {b.why ? (
+        {b.why && !b.suggestion ? (
           <Text className="mt-1.5 text-sm leading-5 text-muted" numberOfLines={2}>
             {b.why}
           </Text>
         ) : null}
+
+        {b.suggestion && (
+          <SuggestionRow
+            suggestion={b.suggestion}
+            onAdd={() =>
+              onAction({ kind: 'add_challenge', label: 'Add it', challengeId: b.suggestion!.id })
+            }
+          />
+        )}
 
         {b.actions.length > 0 && (
           <View className="mt-4 flex-row flex-wrap gap-2">
@@ -114,6 +124,56 @@ export function BriefingCard({
           </View>
         )}
       </Animated.View>
+    </Animated.View>
+  );
+}
+
+/**
+ * The PA's offer, kept short: name and amount on a row; tapping it opens why it helps and the
+ * one button that adds it. The headline above stays a single short question.
+ */
+function SuggestionRow({
+  suggestion: s,
+  onAdd,
+}: {
+  suggestion: NonNullable<Briefing['suggestion']>;
+  onAdd: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Animated.View
+      layout={LinearTransition.duration(250)}
+      className="mt-4 overflow-hidden rounded-2xl bg-bg"
+    >
+      <Pressable
+        onPress={() => setOpen((o) => !o)}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        accessibilityLabel={`${s.title}, ${s.target}`}
+        className="min-h-12 flex-row items-center gap-3 px-4 py-3 active:opacity-80"
+      >
+        <View className="flex-1">
+          <Text className="font-sans-semibold" numberOfLines={1}>
+            {s.title}
+          </Text>
+          <Text className="text-sm text-muted" numberOfLines={1}>
+            {s.target}
+          </Text>
+        </View>
+        <View style={{ transform: [{ rotate: open ? '180deg' : '0deg' }] }}>
+          <ChevronDown size={18} color={colors.muted} />
+        </View>
+      </Pressable>
+      {open && (
+        <Animated.View entering={FadeIn.duration(200)} className="px-4 pb-4">
+          {s.why ? (
+            <Text className="text-sm leading-5 text-muted" numberOfLines={2}>
+              {s.why}
+            </Text>
+          ) : null}
+          <Button className="mt-3" label="Add it" onPress={onAdd} />
+        </Animated.View>
+      )}
     </Animated.View>
   );
 }

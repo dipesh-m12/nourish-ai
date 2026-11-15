@@ -65,7 +65,17 @@ export interface BriefingInput {
   /** Everything eaten today, by name. */
   foods: string[];
   /** The plan's ideas the user hasn't started, best first. */
-  suggestions: { id: string; title: string; category: string }[];
+  suggestions: Suggestion[];
+}
+
+/** A plan idea the PA offers; the card shows it as a row that opens to its why and "Add it". */
+export interface Suggestion {
+  id: string;
+  title: string;
+  category: string;
+  target: string;
+  /** How it'll feel (or why it helps), one short line. */
+  why: string;
 }
 
 export interface Briefing {
@@ -80,6 +90,8 @@ export interface Briefing {
   week: string | null;
   /** Every number the text may contain (the AI rewrite is checked against these). */
   facts: Record<string, number | string>;
+  /** Set when the card offers a new challenge (its details live here, not in the headline). */
+  suggestion: Suggestion | null;
 }
 
 const MEALS = [
@@ -159,7 +171,7 @@ export function buildBriefing(i: BriefingInput): Briefing {
   const daily = i.challenges.filter((c) => c.frequency === 'daily');
   const open = daily.filter((c) => !c.done);
   const week = weakSpot(i.challenges);
-  const base = { greeting, week };
+  const base = { greeting, week, suggestion: null as Suggestion | null };
   // Fallback wording; the AI rewrite blends the lead and their own words into one line.
   const why = (lead: string) => `${lead} You said: “${i.why}”.`;
 
@@ -203,13 +215,10 @@ export function buildBriefing(i: BriefingInput): Briefing {
       headline: bigGap
         ? `Every challenge done today. You still have ${left} kcal: make dinner a proper one, with ${proteinIdeas(i.diet, i.allergies)[0] ?? 'protein'}.`
         : oneMore
-          ? `Every challenge done today. Ready for one more: “${oneMore.title}”?`
+          ? 'Every challenge done today. Ready for one more?'
           : `Every challenge done today, and ${left} kcal still in hand. That's a full day.`,
-      actions: bigGap
-        ? [{ kind: 'log_meal', label: 'Log dinner' }]
-        : oneMore
-          ? [{ kind: 'add_challenge', label: 'Add it', challengeId: oneMore.id }]
-          : [],
+      actions: bigGap ? [{ kind: 'log_meal', label: 'Log dinner' }] : [],
+      suggestion: oneMore,
       why: why('This is what it looks like.'),
       facts: { left },
     };
@@ -393,10 +402,11 @@ export function buildBriefing(i: BriefingInput): Briefing {
     return {
       ...base,
       kind: 'suggest',
-      headline: `All good for now. Want to add “${idea.title}”?`,
-      actions: [{ kind: 'add_challenge', label: 'Add it', challengeId: idea.id }],
+      headline: 'Something new to try?',
+      actions: [],
       why: why('One small habit at a time adds up.'),
       facts: { left },
+      suggestion: idea,
     };
   }
 

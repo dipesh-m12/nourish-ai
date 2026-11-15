@@ -32,5 +32,7 @@ export interface Briefing {
   /** A habit from the last week, e.g. "Salad: 2 of 7 days". */
   week: string | null;
   actions: BriefingAction[];
+  /** A challenge the PA offers: a row on the card that opens to its why and "Add it". */
+  suggestion: { id: string; title: string; target: string; why: string } | null;
   voice: 'ai' | 'rules';
 }
