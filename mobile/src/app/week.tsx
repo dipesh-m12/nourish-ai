@@ -1,12 +1,14 @@
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { ArrowDown, ArrowUp, Check, ChevronLeft, Minus } from 'lucide-react-native';
+import { type ComponentRef, useRef } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { levelToast, useSetLevel } from '@/api/challenges';
 import { useWeek } from '@/api/week';
 import { Button } from '@/components/ui/button';
+import { ShareButton } from '@/components/ui/share-button';
 import { SkeletonBlock, SkeletonGroup } from '@/components/ui/skeleton';
 import { Heading, Text } from '@/components/ui/text';
 import { colors } from '@/constants/colors';
@@ -30,6 +32,8 @@ export default function WeekScreen() {
   const date = localDate();
   const week = useWeek(date);
   const setLevel = useSetLevel();
+  // The share icon turns the whole check-in (plant to reports) into one picture.
+  const shot = useRef<ComponentRef<typeof View>>(null);
   const toast = useToast((s) => s.show);
   const reduceMotion = useReducedMotion();
   // Goals follow progress: one tap moves it a step, from tomorrow (the server picks the number).
@@ -43,7 +47,7 @@ export default function WeekScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-bg">
-      <View className="flex-row items-center px-4 py-2">
+      <View className="flex-row items-center justify-between px-4 py-2">
         <Pressable
           onPress={() => (router.canGoBack() ? router.back() : router.replace('/dashboard'))}
           hitSlop={12}
@@ -53,101 +57,104 @@ export default function WeekScreen() {
         >
           <ChevronLeft size={22} color={colors.ink} />
         </Pressable>
+        {week.data && <ShareButton target={shot} title="Your week" />}
       </View>
 
-      <ScrollView contentContainerClassName="px-6 pb-10" showsVerticalScrollIndicator={false}>
-        {week.isPending && <WeekSkeleton />}
-        {week.isError && (
-          <View className="items-center gap-3 pt-20">
-            <Text className="text-center text-muted">{week.error.message}</Text>
-            <Button variant="secondary" label="Try again" onPress={() => week.refetch()} />
-          </View>
-        )}
+      <ScrollView contentContainerClassName="pb-10" showsVerticalScrollIndicator={false}>
+        <View ref={shot} collapsable={false} className="bg-bg px-6 pb-4">
+          {week.isPending && <WeekSkeleton />}
+          {week.isError && (
+            <View className="items-center gap-3 pt-20">
+              <Text className="text-center text-muted">{week.error.message}</Text>
+              <Button variant="secondary" label="Try again" onPress={() => week.refetch()} />
+            </View>
+          )}
 
-        {w && (
-          <>
-            <Animated.View entering={enter(0)} className="items-center pt-2">
-              <Image
-                source={ART[w.trend]}
-                style={{ width: 96, height: 120 }}
-                contentFit="contain"
-              />
-              <Text className="mt-3 text-xs uppercase tracking-wider text-muted">Your week</Text>
-              <Heading className="mt-1 text-center text-2xl">{w.headline}</Heading>
-            </Animated.View>
-
-            {w.stats.length > 0 && (
-              <Animated.View
-                entering={enter(1)}
-                className="mt-8 overflow-hidden rounded-3xl bg-card"
-              >
-                {w.stats.map((s, i) => (
-                  <StatRow key={s.key} stat={s} first={i === 0} />
-                ))}
+          {w && (
+            <>
+              <Animated.View entering={enter(0)} className="items-center pt-2">
+                <Image
+                  source={ART[w.trend]}
+                  style={{ width: 96, height: 120 }}
+                  contentFit="contain"
+                />
+                <Text className="mt-3 text-xs uppercase tracking-wider text-muted">Your week</Text>
+                <Heading className="mt-1 text-center text-2xl">{w.headline}</Heading>
               </Animated.View>
-            )}
 
-            {w.best && (
-              <Animated.View entering={enter(2)} className="mt-3 rounded-3xl bg-primary-soft p-4">
-                <View className="flex-row items-center gap-3">
-                  <Image source={ART.up} style={{ width: 28, height: 36 }} contentFit="contain" />
-                  <Text className="flex-1">
-                    <Text className="text-muted">Best habit </Text>
-                    <Text className="font-sans-semibold">{w.best}</Text>
-                  </Text>
-                </View>
-                {/* Every day this week: the next step, ready to take. */}
-                {w.levelUp && (
-                  <Button
-                    className="mt-3"
-                    label={`Level up: ${goalText(w.levelUp)}`}
-                    loading={setLevel.isPending && setLevel.variables?.direction === 'up'}
-                    onPress={() => change(w.levelUp!, 'up')}
-                  />
-                )}
-              </Animated.View>
-            )}
-
-            {w.focus && (
-              <Animated.View entering={enter(3)} className="mt-3 rounded-3xl bg-card p-4">
-                <Text>
-                  <Text className="text-muted">Work on </Text>
-                  <Text className="font-sans-semibold">{w.focus.label}</Text>
-                </Text>
-                {/* One step down in one tap when the habit can move; otherwise Nourish helps. */}
-                {w.focus.ease ? (
-                  <Button
-                    className="mt-3"
-                    label={`Make it ${goalText(w.focus.ease)}`}
-                    loading={setLevel.isPending && setLevel.variables?.direction === 'down'}
-                    onPress={() => change(w.focus!.ease!, 'down')}
-                  />
-                ) : (
-                  <Button
-                    className="mt-3"
-                    label="Make it easier"
-                    onPress={() =>
-                      router.push({ pathname: '/assistant', params: { prompt: w.focus!.prompt } })
-                    }
-                  />
-                )}
-              </Animated.View>
-            )}
-
-            {w.reports.length > 0 && (
-              <Animated.View entering={enter(4)} className="mt-8">
-                <Text className="mb-3 font-sans-semibold text-sm uppercase tracking-wider text-muted">
-                  From your reports
-                </Text>
-                <View className="overflow-hidden rounded-3xl bg-card">
-                  {w.reports.map((m, i) => (
-                    <MarkerRow key={m.area} marker={m} first={i === 0} />
+              {w.stats.length > 0 && (
+                <Animated.View
+                  entering={enter(1)}
+                  className="mt-8 overflow-hidden rounded-3xl bg-card"
+                >
+                  {w.stats.map((s, i) => (
+                    <StatRow key={s.key} stat={s} first={i === 0} />
                   ))}
-                </View>
-              </Animated.View>
-            )}
-          </>
-        )}
+                </Animated.View>
+              )}
+
+              {w.best && (
+                <Animated.View entering={enter(2)} className="mt-3 rounded-3xl bg-primary-soft p-4">
+                  <View className="flex-row items-center gap-3">
+                    <Image source={ART.up} style={{ width: 28, height: 36 }} contentFit="contain" />
+                    <Text className="flex-1">
+                      <Text className="text-muted">Best habit </Text>
+                      <Text className="font-sans-semibold">{w.best}</Text>
+                    </Text>
+                  </View>
+                  {/* Every day this week: the next step, ready to take. */}
+                  {w.levelUp && (
+                    <Button
+                      className="mt-3"
+                      label={`Level up: ${goalText(w.levelUp)}`}
+                      loading={setLevel.isPending && setLevel.variables?.direction === 'up'}
+                      onPress={() => change(w.levelUp!, 'up')}
+                    />
+                  )}
+                </Animated.View>
+              )}
+
+              {w.focus && (
+                <Animated.View entering={enter(3)} className="mt-3 rounded-3xl bg-card p-4">
+                  <Text>
+                    <Text className="text-muted">Work on </Text>
+                    <Text className="font-sans-semibold">{w.focus.label}</Text>
+                  </Text>
+                  {/* One step down in one tap when the habit can move; otherwise Nourish helps. */}
+                  {w.focus.ease ? (
+                    <Button
+                      className="mt-3"
+                      label={`Make it ${goalText(w.focus.ease)}`}
+                      loading={setLevel.isPending && setLevel.variables?.direction === 'down'}
+                      onPress={() => change(w.focus!.ease!, 'down')}
+                    />
+                  ) : (
+                    <Button
+                      className="mt-3"
+                      label="Make it easier"
+                      onPress={() =>
+                        router.push({ pathname: '/assistant', params: { prompt: w.focus!.prompt } })
+                      }
+                    />
+                  )}
+                </Animated.View>
+              )}
+
+              {w.reports.length > 0 && (
+                <Animated.View entering={enter(4)} className="mt-8">
+                  <Text className="mb-3 font-sans-semibold text-sm uppercase tracking-wider text-muted">
+                    From your reports
+                  </Text>
+                  <View className="overflow-hidden rounded-3xl bg-card">
+                    {w.reports.map((m, i) => (
+                      <MarkerRow key={m.area} marker={m} first={i === 0} />
+                    ))}
+                  </View>
+                </Animated.View>
+              )}
+            </>
+          )}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );

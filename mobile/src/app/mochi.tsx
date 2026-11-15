@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Redirect, router } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
+import { type ComponentRef, useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,6 +9,7 @@ import { useToday } from '@/api/today';
 import { ConfettiBurst } from '@/components/confetti-burst';
 import { MochiRoom } from '@/components/companion/mochi-room';
 import { Button } from '@/components/ui/button';
+import { ShareButton } from '@/components/ui/share-button';
 import { SkeletonBlock } from '@/components/ui/skeleton';
 import { Heading, Text } from '@/components/ui/text';
 import { CATEGORY_THEME } from '@/constants/category-theme';
@@ -29,6 +30,8 @@ export default function MochiScreen() {
   const c = today.data?.companion;
   const room = c?.room;
   const [celebrate, setCelebrate] = useState(false);
+  // What the share icon turns into a picture: the title, the room and this week's line.
+  const shot = useRef<ComponentRef<typeof View>>(null);
 
   // A newly earned item gets one confetti burst on this device.
   const unlocked = room?.unlocked ?? 0;
@@ -54,7 +57,7 @@ export default function MochiScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-bg">
-      <View className="flex-row items-center px-4 py-2">
+      <View className="flex-row items-center justify-between px-4 py-2">
         <Pressable
           onPress={() => (router.canGoBack() ? router.back() : router.replace('/dashboard'))}
           hitSlop={12}
@@ -64,6 +67,7 @@ export default function MochiScreen() {
         >
           <ChevronLeft size={22} color={colors.ink} />
         </Pressable>
+        {room && <ShareButton target={shot} title={`${c!.name}’s room`} />}
       </View>
 
       <ScrollView contentContainerClassName="px-6 pb-10" showsVerticalScrollIndicator={false}>
@@ -74,25 +78,27 @@ export default function MochiScreen() {
           </View>
         ) : (
           <>
-            <Animated.View entering={enter(0)}>
-              <Heading className="text-center text-2xl">{c.name}’s room</Heading>
-              {/* Here the news is the item itself, not an invitation to come and see. */}
-              <Text className="mt-1 text-center text-muted">
-                {room.newItem ? `New: ${ROOM_ITEM_NAME[room.newItem]}` : c.line}
-              </Text>
-            </Animated.View>
+            <View ref={shot} collapsable={false} className="bg-bg pb-2">
+              <Animated.View entering={enter(0)}>
+                <Heading className="text-center text-2xl">{c.name}’s room</Heading>
+                {/* Here the news is the item itself, not an invitation to come and see. */}
+                <Text className="mt-1 text-center text-muted">
+                  {room.newItem ? `New: ${ROOM_ITEM_NAME[room.newItem]}` : c.line}
+                </Text>
+              </Animated.View>
 
-            <Animated.View entering={enter(1)} className="mt-6">
-              <MochiRoom
-                unlocked={room.unlocked}
-                mood={c.mood ?? 'normal'}
-                newItem={room.newItem}
-              />
-            </Animated.View>
+              <Animated.View entering={enter(1)} className="mt-6">
+                <MochiRoom
+                  unlocked={room.unlocked}
+                  mood={c.mood ?? 'normal'}
+                  newItem={room.newItem}
+                />
+              </Animated.View>
 
-            <Animated.View entering={enter(2)} className="mt-4">
-              <WeekToNext full={room.full} need={room.need} unlocked={room.unlocked} />
-            </Animated.View>
+              <Animated.View entering={enter(2)} className="mt-4">
+                <WeekToNext full={room.full} need={room.need} unlocked={room.unlocked} />
+              </Animated.View>
+            </View>
 
             <Button
               className="mt-6"
