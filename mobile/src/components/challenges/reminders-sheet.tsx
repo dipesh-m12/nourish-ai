@@ -33,6 +33,8 @@ interface Props {
   onClose: () => void;
   /** Open with a time already picked for each habit (the PA's offer): one tap sets them all. */
   suggest?: boolean;
+  /** Open on these exact changes (times the user told the assistant): one tap to confirm. */
+  initialPlan?: ReminderPlan;
 }
 
 /**
@@ -42,7 +44,7 @@ interface Props {
  * - tap a time to change just that one;
  * - opened with `suggest`, it starts on a plan the app picked, so the user only confirms.
  */
-export function RemindersSheet({ visible, date, onClose, suggest = false }: Props) {
+export function RemindersSheet({ visible, date, onClose, suggest = false, initialPlan }: Props) {
   const today = useToday(date);
   const me = useMe();
   const save = useSaveReminders();
@@ -53,13 +55,14 @@ export function RemindersSheet({ visible, date, onClose, suggest = false }: Prop
   const [edited, setPlan] = useState<ReminderPlan | null>(null);
   /** "I'll pick myself": leave the suggested plan for the normal list. */
   const [ownWay, setOwnWay] = useState(false);
-  const suggested = useSuggestedReminders(date, visible && suggest);
+  const suggested = useSuggestedReminders(date, visible && suggest && !initialPlan);
   const markHint = useMarkHintSeen();
-  const offer = suggested.data;
+  const offer = initialPlan ?? suggested.data;
+  const prefilled = suggest || !!initialPlan;
   const hasOffer = !!offer && (offer.changes.length > 0 || offer.water !== null);
   // The suggestion shows until the user edits it (then their copy) or chooses their own way.
-  const plan = edited ?? (suggest && !ownWay && hasOffer ? offer : null);
-  const fromSuggestion = suggest && !ownWay;
+  const plan = edited ?? (prefilled && !ownWay && hasOffer ? offer : null);
+  const fromSuggestion = prefilled && !ownWay;
 
   const challenges = today.data?.challenges ?? [];
   const water = me.data?.preferences.reminders?.water === true;
@@ -218,7 +221,7 @@ export function RemindersSheet({ visible, date, onClose, suggest = false }: Prop
       title={plan ? 'Look right?' : 'Reminders'}
       footer={footer}
     >
-      {suggest && !ownWay && suggested.isPending ? (
+      {suggest && !initialPlan && !ownWay && suggested.isPending ? (
         <SkeletonBlock className="h-40 rounded-2xl" />
       ) : plan ? (
         <Animated.View entering={FadeIn.duration(220)} className="gap-3">

@@ -1,5 +1,14 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { ArrowUp, Bell, ChevronLeft, FileText, ListChecks } from 'lucide-react-native';
+import {
+  ArrowUp,
+  Bell,
+  CalendarCheck,
+  ChevronLeft,
+  FileText,
+  ListChecks,
+  Plus,
+  type LucideIcon,
+} from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, KeyboardAvoidingView, Pressable, TextInput, View } from 'react-native';
 import Animated, { FadeInDown, FadeInUp, useReducedMotion } from 'react-native-reanimated';
@@ -30,8 +39,9 @@ import { cn } from '@/lib/cn';
 import type { Photo } from '@/lib/photo';
 import { pickReport, ReportTooBigError } from '@/lib/report';
 import { useToast } from '@/store/toast';
-import type { AgentMessage } from '@/types/agent';
+import type { AgentAsk, AgentMessage } from '@/types/agent';
 import { localDate } from '@/utils/date';
+import { GoalSheet } from '@/components/challenges/goal-sheet';
 import { RemindersSheet } from '@/components/challenges/reminders-sheet';
 
 /**
@@ -55,6 +65,9 @@ export default function AssistantScreen() {
   const [hint, setHint] = useState<string | null>(null);
   const [showChallenges, setShowChallenges] = useState<boolean | null>(null);
   const [remindersOpen, setRemindersOpen] = useState(false);
+  /** The "+" sheet opened from a chat button; each open remounts it with that ask's words. */
+  const [goalOpens, setGoalOpens] = useState(0);
+  const [goalOpen, setGoalOpen] = useState(false);
   const [proofPhotos, setProofPhotos] = useState<Record<string, Photo>>({});
   const list = useRef<FlatList<AgentMessage>>(null);
 
@@ -226,20 +239,20 @@ export default function AssistantScreen() {
             ListFooterComponent={
               <View className="gap-3 pt-3">
                 {challengeToolsVisible && <ChallengeTools date={date} />}
-                {liveAsk?.kind === 'reminders' && (
-                  <PressableScale
-                    onPress={() => setRemindersOpen(true)}
-                    accessibilityRole="button"
-                    accessibilityLabel="Open reminders"
-                    className="h-12 flex-row items-center justify-center gap-2 self-start rounded-full bg-ink px-5"
-                  >
-                    <Bell size={18} color="#fff" />
-                    <Text className="font-sans-semibold text-white">Reminders</Text>
-                  </PressableScale>
+                {liveAsk && OPENERS[liveAsk.kind as Opener] && (
+                  <OpenButton
+                    ask={liveAsk}
+                    onPress={() => {
+                      if (liveAsk.kind === 'reminders') return setRemindersOpen(true);
+                      if (liveAsk.kind === 'week') return router.push('/week');
+                      setGoalOpens((n) => n + 1);
+                      setGoalOpen(true);
+                    }}
+                  />
                 )}
                 {liveAsk &&
                   liveAsk.kind !== 'challenges' &&
-                  liveAsk.kind !== 'reminders' &&
+                  !OPENERS[liveAsk.kind as Opener] &&
                   !showChallenges && (
                     <AskInput
                       key={last!.id}
@@ -328,7 +341,26 @@ export default function AssistantScreen() {
           </View>
         </View>
       </KeyboardAvoidingView>
-      <RemindersSheet visible={remindersOpen} date={date} onClose={() => setRemindersOpen(false)} />
+      {/* Opened from the chat's buttons, pre-filled with what the user said. */}
+      <RemindersSheet
+        visible={remindersOpen}
+        date={date}
+        suggest={liveAsk?.kind === 'reminders' && liveAsk.suggest === true}
+        initialPlan={
+          liveAsk?.kind === 'reminders' && liveAsk.plan
+            ? { reply: 'Tap a time to change it.', ...liveAsk.plan }
+            : undefined
+        }
+        onClose={() => setRemindersOpen(false)}
+      />
+      <GoalSheet
+        key={goalOpens}
+        visible={goalOpen}
+        date={date}
+        context={liveAsk?.kind === 'goal' ? liveAsk.context : undefined}
+        initialText={liveAsk?.kind === 'goal' ? liveAsk.prefill : undefined}
+        onClose={() => setGoalOpen(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -402,5 +434,35 @@ function ThreadSkeleton() {
         <SkeletonBlock className="h-10 w-24 rounded-full" />
       </View>
     </SkeletonGroup>
+  );
+}
+
+type Opener = 'reminders' | 'week' | 'goal';
+/** Asks that are one button opening a sheet or screen (the rest are inline inputs). */
+const OPENERS: Record<Opener, true> = { reminders: true, week: true, goal: true };
+
+function openerLook(ask: AgentAsk): { icon: LucideIcon; label: string } {
+  if (ask.kind === 'week') return { icon: CalendarCheck, label: 'Your week' };
+  if (ask.kind === 'goal')
+    return { icon: Plus, label: ask.context === 'checkin' ? 'Check in' : 'Add a goal' };
+  return {
+    icon: Bell,
+    label: ask.plan ? 'Review reminders' : ask.suggest ? 'See times' : 'Reminders',
+  };
+}
+
+/** The assistant's "open this" button: dark pill, icon + one or two words. */
+function OpenButton({ ask, onPress }: { ask: AgentAsk; onPress: () => void }) {
+  const { icon: Icon, label } = openerLook(ask);
+  return (
+    <PressableScale
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      className="h-12 flex-row items-center justify-center gap-2 self-start rounded-full bg-ink px-5"
+    >
+      <Icon size={18} color="#fff" />
+      <Text className="font-sans-semibold text-white">{label}</Text>
+    </PressableScale>
   );
 }

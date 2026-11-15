@@ -51,6 +51,15 @@ export async function buildContext(profileId: string, date: string, tz: number) 
     /** What goes into the prompt: compact, numbers already computed. */
     prompt: {
       now: `${date} ${clock.hhmm} (${clock.part})`,
+      /** What the dashboard's PA card says right now (same rules); filled by the agent service. */
+      pa: null as null | {
+        kind: string;
+        card: string;
+        offers: string | null;
+        weakSpot: string | null;
+      },
+      // Reminders as set now ("off" = none), so "what reminders do I have?" is answerable.
+      reminders: { waterSips: profile.preferences.reminders?.water ? 'on' : 'off' },
       // Their own priorities: what they asked for lately and what their reports showed.
       priorities: {
         caresAbout: priorities.focuses,
@@ -133,6 +142,7 @@ export async function buildContext(profileId: string, date: string, tz: number) 
         photoShows: c.tracking.proof,
         missed: c.progress.missed,
         startedOn: c.progress.startedOn,
+        reminder: c.remindAt ?? 'off',
       })),
       planChallenges: (plan?.challenges ?? []).map((c) => ({
         id: c.id,

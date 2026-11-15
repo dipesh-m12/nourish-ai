@@ -365,8 +365,22 @@ export const meals = pgTable(
 
 /** An inline input the assistant asks for: chips, or a number with a unit. */
 export interface AgentAsk {
-  /** photo = the app opens camera/gallery and sends the picture back. */
-  kind: 'choice' | 'number' | 'photo' | 'challenges' | 'reminders';
+  /**
+   * photo = the app opens camera/gallery and sends the picture back. reminders / week / goal
+   * = one button that opens that sheet or screen (reminders and goal can come pre-filled).
+   */
+  kind: 'choice' | 'number' | 'photo' | 'challenges' | 'reminders' | 'week' | 'goal';
+  /** reminders: exact times the user asked for, shown to confirm (nothing saved yet). */
+  plan?: {
+    changes: { id: string; title: string; from: string | null; remindAt: string | null }[];
+    water: boolean | null;
+  };
+  /** reminders: none set yet, so the sheet opens on times the app picks. */
+  suggest?: boolean;
+  /** goal: open the "+" sheet as a check-in (weight, progress). */
+  context?: 'checkin';
+  /** goal: the user's words, already typed in the sheet. */
+  prefill?: string;
   options?: string[];
   unit?: string;
   min?: number;

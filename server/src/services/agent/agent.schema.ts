@@ -16,13 +16,23 @@ export const turnSchema = z.strictObject({
   /** An inline input for the user's next answer. */
   ask: z.strictObject({
     /** photo: the app shows camera/gallery and sends the picture back (client-side tool). */
-    kind: z.enum(['none', 'choice', 'number', 'photo', 'challenges', 'reminders']),
+    kind: z.enum(['none', 'choice', 'number', 'photo', 'challenges', 'reminders', 'week', 'goal']),
     options: z.array(z.string().max(32)).max(6),
     unit: z.string().max(12),
     min: z.number(),
     max: z.number(),
     step: z.number(),
     initial: z.number(),
+    /** reminders: times the user asked for; [] = just open it (or let the app pick times). */
+    reminders: z
+      .array(z.strictObject({ challengeId: z.string().max(40), at: z.string().max(5) }))
+      .max(10),
+    /** reminders: water sip nudges on/off, or "same". */
+    waterSips: z.enum(['same', 'on', 'off']),
+    /** goal: "checkin" = a progress update (weight); "new" = a new goal or habit. */
+    goalContext: z.enum(['new', 'checkin']),
+    /** goal: the user's words to start the sheet with ("" = empty). */
+    prefill: z.string().max(200),
   }),
   /** Something to do. Becomes a card; nothing happens until the user confirms. */
   propose: z.strictObject({
@@ -67,6 +77,7 @@ export const turnSchema = z.strictObject({
       'get_activities',
       'get_profile',
       'get_plan',
+      'get_week',
       'search_exercises',
       'suggest_exercises',
     ]),

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { generateStructured } from '../ai/ai.service';
-import { buildContext, localClock } from '../agent/agent.context';
+import { type AgentContext, buildContext, localClock } from '../agent/agent.context';
 import { levelUpFor } from '../challenges/level';
 import { signalsService } from '../priorities/signals.service';
 import { db } from '../../db';
@@ -101,9 +101,9 @@ export const briefingService = {
   },
 
   /** Rules only, no AI call: what push nudges use (cheap enough to run for every user). */
-  async rulesFor(profileId: string, date: string, tz: number) {
+  async rulesFor(profileId: string, date: string, tz: number, built?: AgentContext) {
     const [ctx, weighIns, profile] = await Promise.all([
-      buildContext(profileId, date, tz),
+      built ?? buildContext(profileId, date, tz),
       signalsService.weighIns(profileId, 1),
       db.query.profiles.findFirst({
         where: eq(profiles.id, profileId),

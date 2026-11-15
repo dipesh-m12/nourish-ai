@@ -28,6 +28,9 @@ import { openingNudge } from './agent.nudges';
 import { AGENT_SYSTEM } from './agent.prompt';
 import { turnSchema, type Turn } from './agent.schema';
 import { signalsService } from '../priorities/signals.service';
+import { cleanAsk } from './agent.asks';
+import { briefingService } from '../briefing/briefing.service';
+import { weekService } from '../week/week.service';
 
 /** Messages a user can send before the paywall asks for a plan (enforced with subscriptions). */
 export const FREE_MESSAGES = 5;
@@ -60,23 +63,6 @@ function toView(m: AgentMessage, action?: AgentAction) {
 
 const expired = (a: AgentAction) =>
   a.status === 'proposed' && Date.now() - a.createdAt.getTime() > ACTION_TTL_MS;
-
-/** Drops "none" sentinels and anything malformed, so the app only gets usable inputs. */
-function cleanAsk(ask: Turn['ask']): AgentAsk | null {
-  if (ask.kind === 'photo') return { kind: 'photo' };
-  if (ask.kind === 'challenges') return { kind: 'challenges' };
-  if (ask.kind === 'reminders') return { kind: 'reminders' };
-  if (ask.kind === 'choice') {
-    const options = [...new Set(ask.options.map((o) => o.trim()).filter(Boolean))].slice(0, 5);
-    return options.length >= 2 ? { kind: 'choice', options } : null;
-  }
-  if (ask.kind === 'number') {
-    if (!(ask.max > ask.min) || !(ask.step > 0)) return null;
-    const initial = Math.min(ask.max, Math.max(ask.min, ask.initial || ask.min));
-    return { kind: 'number', unit: ask.unit, min: ask.min, max: ask.max, step: ask.step, initial };
-  }
-  return null;
-}
 
 // ---------- persistence ----------
 
@@ -158,6 +144,22 @@ function transcript(history: Awaited<ReturnType<typeof messagesOf>>) {
     }));
 }
 
+/** Adds what the dashboard's PA card says right now, so chat and card never disagree. */
+async function withPa(ctx: AgentContext, profileId: string, date: string, tz: number) {
+  try {
+    const { rules } = await briefingService.rulesFor(profileId, date, tz, ctx);
+    ctx.prompt.pa = {
+      kind: rules.kind,
+      card: rules.headline,
+      offers: rules.suggestion?.title ?? rules.actions[0]?.label ?? null,
+      weakSpot: rules.week,
+    };
+  } catch {
+    // The chat works without it.
+  }
+  return ctx;
+}
+
 async function think(
   ctx: AgentContext,
   history: Awaited<ReturnType<typeof messagesOf>>,
@@ -200,7 +202,11 @@ async function think(
           })),
         };
       }
-      const fresh = await buildContext(profileId, date, tz);
+      if (tool === 'get_week') {
+        // The weekly check-in, exactly as the Week screen shows it.
+        return { context, result: await weekService.review(profileId, date, tz) };
+      }
+      const fresh = await withPa(await buildContext(profileId, date, tz), profileId, date, tz);
       const result = readSlice(fresh, tool, query);
       if (!result) throw new Error('Unsupported read tool');
       return { context: fresh, result };
@@ -330,7 +336,9 @@ export const agentService = {
     }
 
     const [initialContext, history] = await Promise.all([
-      buildContext(profileId, input.date, input.tz),
+      buildContext(profileId, input.date, input.tz).then((c) =>
+        withPa(c, profileId, input.date, input.tz),
+      ),
       messagesOf(conv.id),
     ]);
 
@@ -370,7 +378,7 @@ export const agentService = {
         await say(conv.id, profileId, turn.say, { actionId: action!.id });
       }
     } else {
-      await say(conv.id, profileId, turn.say, { ask: cleanAsk(turn.ask) });
+      await say(conv.id, profileId, turn.say, { ask: cleanAsk(turn.ask, ctx) });
     }
     return { messages: await messagesOf(conv.id), usage: await usage(profileId) };
   },

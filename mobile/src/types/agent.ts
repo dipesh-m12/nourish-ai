@@ -3,7 +3,19 @@ import type { MealCredit, MealItem } from './meal';
 import type { TodayChallenge } from './today';
 
 export interface AgentAsk {
-  kind: 'choice' | 'number' | 'photo' | 'challenges' | 'reminders';
+  /** reminders / week / goal: one button that opens that sheet or screen, maybe pre-filled. */
+  kind: 'choice' | 'number' | 'photo' | 'challenges' | 'reminders' | 'week' | 'goal';
+  /** reminders: the times the user asked for, to confirm. */
+  plan?: {
+    changes: { id: string; title: string; from: string | null; remindAt: string | null }[];
+    water: boolean | null;
+  };
+  /** reminders: none set yet, so the sheet opens on times the app picks. */
+  suggest?: boolean;
+  /** goal: open the "+" sheet as a check-in (weight, progress). */
+  context?: 'checkin';
+  /** goal: the user's words, already typed in. */
+  prefill?: string;
   options?: string[];
   unit?: string;
   min?: number;

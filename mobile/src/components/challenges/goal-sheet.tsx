@@ -47,6 +47,8 @@ interface Props {
   onManage?: () => void;
   /** Why it was opened (the PA's check-in): changes the ask, and the AI is told. */
   context?: GoalContext;
+  /** Words to start with (the assistant passes what the user said); read when it mounts. */
+  initialText?: string;
 }
 
 /** The sheet's question and hint for each reason it can be opened. */
@@ -65,14 +67,14 @@ interface Draft {
  * "What do you want to achieve?" Say it, type it, or show a photo (a report, a plate).
  * The PA proposes 1–3 challenges with how they'll feel; the user keeps some and says how long.
  */
-export function GoalSheet({ visible, date, onClose, onManage, context }: Props) {
+export function GoalSheet({ visible, date, onClose, onManage, context, initialText }: Props) {
   const ask = ASK[context ?? 'default'];
   const queryClient = useQueryClient();
   const active = useToday(date).data?.challenges ?? [];
   const propose = useProposeChallenges();
   const create = useCreateChallenges();
   const toast = useToast((s) => s.show);
-  const [text, setText] = useState('');
+  const [text, setText] = useState(initialText ?? '');
   // A camera photo, or a report (PDF or image) from the file picker.
   const [photo, setPhoto] = useState<Photo | Report | null>(null);
   const [result, setResult] = useState<ProposeResult | null>(null);

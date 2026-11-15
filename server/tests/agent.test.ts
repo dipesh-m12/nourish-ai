@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { checkTurn, messageGuardrail, refusalFor } from '../src/services/agent/agent.guardrails';
+import { cleanAsk } from '../src/services/agent/agent.asks';
+import type { AgentContext } from '../src/services/agent/agent.context';
 import { runTurnLoop } from '../src/services/agent/agent.loop';
 import { turnSchema, type Turn } from '../src/services/agent/agent.schema';
 import { agentMessageSchema } from '../src/validators/agent.validator';
@@ -10,7 +12,19 @@ export function turn(overrides: Partial<Turn> = {}): Turn {
     topic: 'wellness',
     concern: '',
     say: 'How can I help with your day?',
-    ask: { kind: 'none', options: [], unit: '', min: 0, max: 0, step: 0, initial: 0 },
+    ask: {
+      kind: 'none',
+      options: [],
+      unit: '',
+      min: 0,
+      max: 0,
+      step: 0,
+      initial: 0,
+      reminders: [],
+      waterSips: 'same',
+      goalContext: 'new',
+      prefill: '',
+    },
     propose: {
       kind: 'none',
       mealText: '',
@@ -177,4 +191,60 @@ test('photo requests validate the upload envelope and keep the existing text pat
       .success,
     false,
   );
+});
+
+const ctxWith = (remindAt: string | null, sips: 'on' | 'off') =>
+  ({
+    raw: { challenges: [{ id: 'walk', title: 'Evening walk', remindAt }] },
+    prompt: { reminders: { waterSips: sips } },
+  }) as unknown as AgentContext;
+
+test('reminders ask: pre-fills only real challenges and clock times, drops no-ops', () => {
+  const ask = {
+    ...turn().ask,
+    kind: 'reminders' as const,
+    reminders: [
+      { challengeId: 'walk', at: '19:00' },
+      { challengeId: 'someone-else', at: '08:00' },
+      { challengeId: 'walk', at: '7 pm' },
+    ],
+    waterSips: 'off' as const,
+  };
+  assert.deepEqual(cleanAsk(ask, ctxWith(null, 'on')), {
+    kind: 'reminders',
+    plan: {
+      changes: [{ id: 'walk', title: 'Evening walk', from: null, remindAt: '19:00' }],
+      water: false,
+    },
+  });
+  // Same time as already set, sips already off: nothing to change, so just the button.
+  assert.deepEqual(
+    cleanAsk(
+      { ...ask, reminders: [{ challengeId: 'walk', at: '19:00' }] },
+      ctxWith('19:00', 'off'),
+    ),
+    { kind: 'reminders' },
+  );
+  // Nothing set yet and no times given: the app picks them.
+  assert.deepEqual(cleanAsk({ ...ask, reminders: [], waterSips: 'same' }, ctxWith(null, 'off')), {
+    kind: 'reminders',
+    suggest: true,
+  });
+});
+
+test('goal ask: check-in context and the user words carry over', () => {
+  const ask = {
+    ...turn().ask,
+    kind: 'goal' as const,
+    goalContext: 'checkin' as const,
+    prefill: ' 72 kg ',
+  };
+  assert.deepEqual(cleanAsk(ask, ctxWith(null, 'off')), {
+    kind: 'goal',
+    context: 'checkin',
+    prefill: '72 kg',
+  });
+  assert.deepEqual(cleanAsk({ ...ask, goalContext: 'new', prefill: '' }, ctxWith(null, 'off')), {
+    kind: 'goal',
+  });
 });
