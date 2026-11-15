@@ -2,6 +2,7 @@ import Constants from 'expo-constants';
 import { type Href, Redirect, router } from 'expo-router';
 import {
   Bell,
+  BrainCircuit,
   ChevronLeft,
   ChevronRight,
   Compass,
@@ -32,6 +33,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Heading, Text } from '@/components/ui/text';
 import { colors } from '@/constants/colors';
 import { GOAL_OPTIONS } from '@/constants/onboarding';
+import { ContextSheet } from '@/components/profile/context-sheet';
 import { DetailsSheet } from '@/components/profile/details-sheet';
 import { cn } from '@/lib/cn';
 import { useSession } from '@/store/session';
@@ -68,6 +70,7 @@ export default function ProfileScreen() {
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [remindersOpen, setRemindersOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [contextOpen, setContextOpen] = useState(false);
 
   const logOut = async () => {
     setLeaving(true);
@@ -153,6 +156,12 @@ export default function ProfileScreen() {
             label="Your details"
             hint="Body, diet, goal"
             onPress={() => setDetailsOpen(true)}
+          />
+          <ActionRow
+            icon={BrainCircuit}
+            label="What Nourish knows"
+            hint="Everything your assistant uses"
+            onPress={() => setContextOpen(true)}
           />
           <ActionRow
             icon={Sprout}
@@ -249,6 +258,7 @@ export default function ProfileScreen() {
       </ScrollView>
 
       <DetailsSheet visible={detailsOpen} profile={profile} onClose={() => setDetailsOpen(false)} />
+      <ContextSheet visible={contextOpen} onClose={() => setContextOpen(false)} />
       <FeedbackSheet visible={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
       <RemindersSheet
         visible={remindersOpen}

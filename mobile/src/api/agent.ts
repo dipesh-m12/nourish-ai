@@ -20,6 +20,19 @@ export function useAgentThread(date: string) {
   });
 }
 
+export interface AgentContextView {
+  sections: { title: string; rows: { label: string; value: string }[] }[];
+}
+
+/** What the assistant and Mochi know, in plain words (Profile → What Nourish knows). */
+export function useAgentContext(date: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['agent-context', date],
+    queryFn: () => request<AgentContextView>(`/me/agent/context?date=${date}&tz=${tz()}`),
+    enabled,
+  });
+}
+
 /** Writes the server's latest messages into the thread cache. */
 function useSetMessages(date: string) {
   const queryClient = useQueryClient();

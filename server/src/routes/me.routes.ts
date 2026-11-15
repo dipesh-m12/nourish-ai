@@ -115,6 +115,7 @@ router.delete('/activities/:id', activityController.remove);
 
 // The assistant: today's thread, a message, and confirming or cancelling one of its cards.
 router.get('/agent', agentController.open);
+router.get('/agent/context', agentController.context);
 router.post('/agent/messages', validateBody(agentMessageSchema), agentController.send);
 router.post(
   '/agent/actions/:id/confirm',

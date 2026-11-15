@@ -1,7 +1,9 @@
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { authedProfileId } from '../middlewares/auth';
+import { buildContext } from '../services/agent/agent.context';
 import { agentService } from '../services/agent/agent.service';
+import { contextSummary } from '../services/agent/context-summary';
 import { AppError } from '../utils/app-error';
 import {
   agentActionIdParamSchema,
@@ -21,6 +23,13 @@ export const agentController = {
   async open(req: Request, res: Response) {
     const { date, tz } = parse(agentOpenQuerySchema, req.query);
     res.json(await agentService.open(authedProfileId(req), date, tz));
+  },
+
+  /** What the assistant and Mochi know about the user, in plain words (Profile sheet). */
+  async context(req: Request, res: Response) {
+    const { date, tz } = parse(agentOpenQuerySchema, req.query);
+    const ctx = await buildContext(authedProfileId(req), date, tz);
+    res.json({ sections: contextSummary(ctx.prompt) });
   },
 
   async send(req: Request, res: Response) {
