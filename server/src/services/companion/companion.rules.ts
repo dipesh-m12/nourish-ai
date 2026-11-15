@@ -37,7 +37,7 @@ export interface MoodView {
 }
 
 /** Was this past day perfect? (No active challenges that day = not perfect.) */
-function perfect(daily: DailyHistory[], day: string) {
+export function perfectDay(daily: DailyHistory[], day: string) {
   const active = daily
     .map((c) => ({ c, h: c.history.find((x) => x.date === day) }))
     .filter((x) => x.h?.active);
@@ -50,7 +50,7 @@ function hadAny(daily: DailyHistory[], day: string) {
 }
 
 export function companionMood(i: MoodInput): MoodView {
-  const missed = (day: string) => day >= i.adoptedOn && !perfect(i.daily, day);
+  const missed = (day: string) => day >= i.adoptedOn && !perfectDay(i.daily, day);
 
   // 1. Three missed days in a row (all after adoption): she leaves.
   const lastDays = Array.from({ length: DAYS_UNTIL_SHE_LEAVES }, (_, n) =>
@@ -80,7 +80,8 @@ export function companionMood(i: MoodInput): MoodView {
   if (missed(addDays(i.today, -1))) {
     const week = Array.from({ length: REST_EVERY_DAYS - 1 }, (_, n) => addDays(i.today, -(n + 2)));
     const restDay =
-      perfect(i.daily, week[0]!) && week.every((d) => perfect(i.daily, d) || !hadAny(i.daily, d));
+      perfectDay(i.daily, week[0]!) &&
+      week.every((d) => perfectDay(i.daily, d) || !hadAny(i.daily, d));
     return {
       mood: 'sad',
       line: restDay

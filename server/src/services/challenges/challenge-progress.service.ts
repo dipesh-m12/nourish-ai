@@ -16,6 +16,7 @@ import { addDays, lastNDays, weekStart } from '../../utils/dates';
 import type { LogProgressInput } from '../../validators/challenge.validator';
 import { burnService } from '../burn/burn.service';
 import { COMPANION_NAME, companionMood } from '../companion/companion.rules';
+import { itemName, roomView, updateRoom } from '../companion/room.rules';
 import { profileService } from '../profile.service';
 import { mealService } from '../meals/meal.service';
 import { activeChallenges, endedChallenges } from './active';
@@ -211,7 +212,10 @@ async function companionView(
   tz: number,
   items: {
     frequency: string;
-    progress: { goal: number; history: { date: string; value: number; active: boolean }[] };
+    progress: {
+      goal: number;
+      history: { date: string; value: number; active: boolean; goal: number }[];
+    };
   }[],
 ) {
   const [row] = await db
@@ -233,19 +237,25 @@ async function companionView(
     };
   }
 
-  const view = companionMood({
-    today,
-    adoptedOn: prefs.adoptedAt ? localDay(new Date(prefs.adoptedAt), tz) : today,
-    daily: items
-      .filter((c) => c.frequency === 'daily')
-      .map((c) => ({ goal: c.progress.goal, history: c.progress.history })),
-    acceptedCount: items.length,
-  });
+  const adoptedOn = prefs.adoptedAt ? localDay(new Date(prefs.adoptedAt), tz) : today;
+  const daily = items
+    .filter((c) => c.frequency === 'daily')
+    .map((c) => ({ goal: c.progress.goal, history: c.progress.history }));
+  const view = companionMood({ today, adoptedOn, daily, acceptedCount: items.length });
   if (view.mood === 'left') {
     await profileService.companionLeft(profileId);
     return { ...base, status: 'left' as const, ...view };
   }
-  return { ...base, status: 'adopted' as const, ...view };
+
+  // Her room grows with good weeks; counted here (lazily, once per new week) and saved.
+  const update = updateRoom(row!.preferences.mochiRoom, daily, today, adoptedOn);
+  if (update.changed) await profileService.saveMochiRoom(profileId, update.state);
+  const room = roomView(update.state, daily, today);
+  // A new item is news for a couple of days: she says so.
+  const line = room.newItem
+    ? `${COMPANION_NAME} got ${itemName[room.newItem]}! Come see her room.`
+    : view.line;
+  return { ...base, status: 'adopted' as const, ...view, line, room };
 }
 
 export const challengeProgressService = {

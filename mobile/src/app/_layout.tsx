@@ -99,6 +99,7 @@ export default function RootLayout() {
               <Stack.Screen name="club" options={{ animation: 'slide_from_bottom' }} />
               <Stack.Screen name="whats-new" options={{ animation: 'fade' }} />
               <Stack.Screen name="week" options={{ animation: 'slide_from_bottom' }} />
+              <Stack.Screen name="mochi" options={{ animation: 'slide_from_bottom' }} />
               <Stack.Screen name="place" options={{ animation: 'slide_from_bottom' }} />
               <Stack.Screen name="reminders" />
               <Stack.Screen name="trophy/[id]" options={{ animation: 'fade' }} />

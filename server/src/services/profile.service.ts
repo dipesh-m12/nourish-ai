@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { and, asc, eq, isNull, ne, sql } from 'drizzle-orm';
 import { db } from '../db';
-import { goals, profiles, type Goal, type Profile } from '../db/schema';
+import { goals, profiles, type Goal, type Preferences, type Profile } from '../db/schema';
 import { AppError } from '../utils/app-error';
 import type {
   CreateProfileInput,
@@ -234,6 +234,16 @@ export const profileService = {
   },
 
   /** Called when the mood rules say she's gone (3 missed days): remembered until re-adoption. */
+  /** Mochi's room progress (merged into preferences, nothing else touched). */
+  async saveMochiRoom(id: string, room: NonNullable<Preferences['mochiRoom']>) {
+    await db
+      .update(profiles)
+      .set({
+        preferences: sql`${profiles.preferences} || ${JSON.stringify({ mochiRoom: room })}::jsonb`,
+      })
+      .where(eq(profiles.id, id));
+  },
+
   async companionLeft(id: string) {
     const [row] = await db
       .select({ preferences: profiles.preferences })

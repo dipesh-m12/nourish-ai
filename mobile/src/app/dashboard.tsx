@@ -301,7 +301,10 @@ export default function DashboardScreen() {
             onAction={runBriefingAction}
             onCelebrate={celebrate}
             companion={today.data?.companion}
-            onCompanion={() => router.push('/adopt')}
+            // Hers: her room. Otherwise the adopt screen explains and asks.
+            onCompanion={() =>
+              router.push(today.data?.companion?.status === 'adopted' ? '/mochi' : '/adopt')
+            }
           />
         </Animated.View>
 

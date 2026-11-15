@@ -179,7 +179,7 @@ export default function ProfileScreen() {
           </Pressable>
           {companion?.status === 'adopted' || companion?.status === 'left' ? (
             <Pressable
-              onPress={() => router.push('/adopt')}
+              onPress={() => router.push(companion.status === 'adopted' ? '/mochi' : '/adopt')}
               accessibilityRole="button"
               accessibilityLabel={`${companion.name}: ${companion.line ?? ''}`}
               className="flex-row items-center gap-3 px-4 py-3 active:bg-bg"
