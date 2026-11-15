@@ -63,6 +63,9 @@ function pairs<T>(items: T[]): T[][] {
   return rows;
 }
 
+/** One sheet closing (≈220–320 ms) before the next opens. */
+const SHEET_HANDOFF_MS = 350;
+
 export default function DashboardScreen() {
   const token = useSession((s) => s.token);
   const signOut = useSession((s) => s.signOut);
@@ -440,7 +443,8 @@ export default function DashboardScreen() {
         onManage={() => {
           setGoalOpen(false);
           clearLink();
-          setPickerOpen(true);
+          // Android drops a modal opened while another is still closing: wait for it to go.
+          setTimeout(() => setPickerOpen(true), SHEET_HANDOFF_MS);
         }}
       />
       <RemindersSheet

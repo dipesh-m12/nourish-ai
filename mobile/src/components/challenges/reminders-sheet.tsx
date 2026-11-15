@@ -225,7 +225,8 @@ export function RemindersSheet({ visible, date, onClose, suggest = false, initia
         <SkeletonBlock className="h-40 rounded-2xl" />
       ) : plan ? (
         <Animated.View entering={FadeIn.duration(220)} className="gap-3">
-          <Text className="text-muted">{plan.reply}</Text>
+          {/* The AI's summary of what was said; a picked or pre-filled plan speaks for itself. */}
+          {!fromSuggestion && <Text className="text-muted">{plan.reply}</Text>}
           <View className="overflow-hidden rounded-2xl bg-card">
             {plan.changes.map((c, i) => (
               <Animated.View
