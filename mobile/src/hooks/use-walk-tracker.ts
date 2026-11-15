@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { Pedometer } from 'expo-sensors';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { onlineManager } from '@tanstack/react-query';
 import { AppState, Platform } from 'react-native';
 import { sessionsApi } from '@/api/sessions';
 import { stepsBetween } from '@/lib/health';
@@ -20,6 +21,13 @@ const MAX_STEP_M = 120;
 const MAX_SPEED_MS = 6; // default (walking); a bike passes its own via options
 /** No step and no real move for this long = standing still: the clock stops (auto-pause). */
 const STILL_AFTER_MS = 8000;
+/**
+ * GPS is only ignored as "feet still" after this long with no step: Android's step counter
+ * reports in batches, so a shorter window drops real points and leaves the route blank.
+ */
+const FEET_STILL_MS = 20_000;
+/** Started offline: try to open the server session again this often. */
+const START_RETRY_MS = 30_000;
 /** A clock tick later than this means the app was asleep or closed: fill the gap. */
 const GAP_MS = 15_000;
 /** Never credit more than this for time away with no data at all. */
@@ -97,14 +105,18 @@ export function useWalkTracker({ maxSpeed = MAX_SPEED_MS }: { maxSpeed?: number 
   // The live copy, mutated by GPS/step/clock callbacks; React state mirrors it once a second.
   const ref = useRef<WalkState | null>(null);
   const lastMoveAt = useRef(0);
+  const lastStepAt = useRef(0);
   const wasMoving = useRef(false);
   const hasPedometer = useRef(false);
   const lastFixT = useRef(0);
   const lastCheckpoint = useRef(0);
+  const lastStartTry = useRef(0);
 
   const publish = useCallback(() => {
     const s = ref.current;
-    setWalk(s ? { ...s } : null);
+    // A new path array each time: the map (memoised by the React Compiler) only redraws the
+    // line when the array itself changes, and the callbacks push into the live copy.
+    setWalk(s ? { ...s, path: [...s.path] } : null);
     if (s) void saveWalk(s);
   }, []);
 
@@ -120,6 +132,7 @@ export function useWalkTracker({ maxSpeed = MAX_SPEED_MS }: { maxSpeed?: number 
       if (s) {
         ref.current = s;
         lastMoveAt.current = Date.now();
+        lastStepAt.current = Date.now();
         publish();
       }
       setRestored(s ? 'resumed' : 'none');
@@ -149,7 +162,7 @@ export function useWalkTracker({ maxSpeed = MAX_SPEED_MS }: { maxSpeed?: number 
       const glitch = moved > MAX_STEP_M * Math.max(1, secs / 10) || moved / secs > maxSpeed;
       // With the screen open and a step counter, GPS only counts while the feet move too.
       const feetStill =
-        live && hasPedometer.current && Date.now() - lastMoveAt.current > STILL_AFTER_MS;
+        live && hasPedometer.current && Date.now() - lastStepAt.current > FEET_STILL_MS;
       s.anchor = point; // re-anchor either way, so a skipped jump is never added later
       if (glitch || feetStill) return;
       s.path.push(point);
@@ -228,6 +241,7 @@ export function useWalkTracker({ maxSpeed = MAX_SPEED_MS }: { maxSpeed?: number 
             cur.steps += steps - seen;
             seen = steps;
             lastMoveAt.current = Date.now();
+            lastStepAt.current = Date.now();
           });
         })
         .catch(() => undefined); // steps are a bonus; the walk works without them
@@ -251,6 +265,28 @@ export function useWalkTracker({ maxSpeed = MAX_SPEED_MS }: { maxSpeed?: number 
       setMoving(isMoving);
       if (isMoving) cur.movingMs += delta;
       publish();
+      // Started with no signal: open the server session once it's back (the route stays on
+      // the phone meanwhile, and the next checkpoint sends all of it).
+      if (
+        !cur.sessionId &&
+        onlineManager.isOnline() &&
+        now - lastStartTry.current > START_RETRY_MS
+      ) {
+        lastStartTry.current = now;
+        void sessionsApi
+          .start({
+            kind: 'walk',
+            challengeId: cur.challengeId ?? undefined,
+            date: cur.date,
+            data: { title: cur.title },
+          })
+          .then((session) => {
+            if (ref.current !== cur || cur.sessionId) return;
+            cur.sessionId = session.id;
+            lastCheckpoint.current = 0;
+          })
+          .catch(() => undefined);
+      }
       // A checkpoint on the server now and then: a lost phone still has the walk so far.
       if (cur.sessionId && now - lastCheckpoint.current > CHECKPOINT_MS) {
         lastCheckpoint.current = now;
@@ -267,6 +303,13 @@ export function useWalkTracker({ maxSpeed = MAX_SPEED_MS }: { maxSpeed?: number 
       }
     }, 1000);
 
+    // Back online: send the route now rather than at the next minute.
+    const offOnline = onlineManager.subscribe((online) => {
+      if (!online) return;
+      lastCheckpoint.current = 0;
+      lastStartTry.current = 0;
+    });
+
     // Leaving the app: save now; coming back: fill the gap straight away.
     const appState = AppState.addEventListener('change', (state) => {
       if (state === 'active') void fillGap(Date.now());
@@ -279,6 +322,7 @@ export function useWalkTracker({ maxSpeed = MAX_SPEED_MS }: { maxSpeed?: number 
       gps?.remove();
       pedometer?.remove();
       appState.remove();
+      offOnline();
       setMoving(false);
     };
   }, [running, fillGap, takeFix, publish]);
@@ -311,6 +355,7 @@ export function useWalkTracker({ maxSpeed = MAX_SPEED_MS }: { maxSpeed?: number 
       background,
     };
     lastMoveAt.current = now; // the first seconds count while you get going
+    lastStepAt.current = now;
     wasMoving.current = true;
     publish();
     // The server copy is a bonus: offline, the walk still works and logs the old way.
@@ -347,6 +392,7 @@ export function useWalkTracker({ maxSpeed = MAX_SPEED_MS }: { maxSpeed?: number 
     s.lastTickAt = Date.now(); // a pause never counts as time away
     s.anchor = null; // nor as distance
     lastMoveAt.current = Date.now();
+    lastStepAt.current = Date.now();
     wasMoving.current = true;
     publish();
   };

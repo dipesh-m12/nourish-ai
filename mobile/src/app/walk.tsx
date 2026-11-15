@@ -7,7 +7,7 @@ import { ActivityIndicator, BackHandler, Pressable, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { sessionsApi } from '@/api/sessions';
-import { useLogProgress, useToday } from '@/api/today';
+import { useToday } from '@/api/today';
 import { WalkMap } from '@/components/formats/walk-map';
 import { WalkSummary, type WalkResult } from '@/components/formats/walk-summary';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,8 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Text } from '@/components/ui/text';
 import { colors } from '@/constants/colors';
 import { downsample, useWalkTracker } from '@/hooks/use-walk-tracker';
+import { isNetworkError, queueWalk, sendWalk, type PendingWalk } from '@/lib/walk-outbox';
+import { useToast } from '@/store/toast';
 import { localDate } from '@/utils/date';
 import { formatClock, formatDistance } from '@/utils/geo';
 
@@ -38,7 +40,7 @@ export default function WalkScreen() {
   const date = localDate();
   const today = useToday(date);
   const walk = useWalkTracker();
-  const log = useLogProgress(date);
+  const toast = useToast((s) => s.show);
   const [leaving, setLeaving] = useState(false);
   const [saving, setSaving] = useState(false);
   const [summary, setSummary] = useState<WalkResult | null>(null);
@@ -85,19 +87,23 @@ export default function WalkScreen() {
     }
     walk.pause();
     setSaving(true);
+    const pending: PendingWalk = {
+      sessionId: w.sessionId,
+      challengeId: w.challengeId,
+      date: w.date,
+      amount: challenge ? amount : undefined,
+      data: done,
+    };
     try {
       let calories: number | null = null;
-      if (w.sessionId) {
-        const result = await sessionsApi.finish(w.sessionId, {
-          date: w.date,
-          amount: challenge ? amount : undefined,
-          data: done,
-        });
-        calories = result.calories;
-      } else if (challenge) {
-        // Started offline: no server session, log the old way.
-        const result = await log.mutateAsync({ challengeId: challenge.id, amount, source: 'walk' });
-        calories = result.verified ? (result.burned?.calories ?? null) : null;
+      try {
+        // Started offline: sendWalk opens the server session first, so it still gets a trophy.
+        calories = (await sendWalk(pending)).calories;
+      } catch (err) {
+        if (!isNetworkError(err)) throw err;
+        // No signal: keep it on the phone; it's sent when the app is next online.
+        await queueWalk(pending);
+        toast('Saved on your phone. It syncs when you’re online.');
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       await walk.clear();
@@ -136,7 +142,7 @@ export default function WalkScreen() {
   return (
     <View className="flex-1 bg-bg">
       {walk.status === 'running' && <KeepAwake />}
-      <WalkMap path={walk.path} locate={walk.allowed === true} />
+      <WalkMap path={walk.path} locate={walk.allowed === true} live={walk.status === 'running'} />
 
       <SafeAreaView edges={['top']} className="absolute left-4 top-0">
         <Pressable
