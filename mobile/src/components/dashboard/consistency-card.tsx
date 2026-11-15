@@ -3,6 +3,7 @@ import { Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 import Animated, { FadeIn, ZoomIn, useReducedMotion } from 'react-native-reanimated';
 import { Text } from '@/components/ui/text';
+import { colors } from '@/constants/colors';
 import type { TodayChallenge } from '@/types/today';
 import { weekdayLetter } from '@/utils/date';
 
@@ -30,19 +31,6 @@ function summarise(challenges: TodayChallenge[]): DaySummary[] {
   });
 }
 
-/** Consecutive "perfect" days (all active daily challenges done), ending today or yesterday. */
-function perfectStreak(days: DaySummary[]): number {
-  const perfect = (d?: DaySummary) => Boolean(d && d.active > 0 && d.done === d.active);
-  let i = days.length - 1;
-  if (!perfect(days[i])) i--; // today isn't over: don't break the streak yet
-  let streak = 0;
-  while (perfect(days[i])) {
-    streak++;
-    i--;
-  }
-  return streak;
-}
-
 const FLOWER = require('@/assets/images/world/flower-bloom.webp');
 const SPROUT = require('@/assets/images/world/sprout.webp');
 const WILTED = require('@/assets/images/world/flower-wilted.webp');
@@ -66,9 +54,8 @@ export function ConsistencyCard({ challenges }: { challenges: TodayChallenge[] }
   const week = days.slice(-7);
   // Nothing has grown yet (first day, nothing done): an empty row of soil says nothing.
   if (!week.some((d) => d.active > 0 && d.done > 0)) return null;
-  // The garden says it; words only for a streak worth celebrating (no "0 of 1 days" tally).
-  const streak = perfectStreak(days);
-  const line = streak >= 3 ? `${streak} perfect days in a row` : null;
+  // One number on top, the garden under it: how many days this week every habit got done.
+  const full = week.filter((d) => d.active > 0 && d.done === d.active).length;
 
   return (
     <Animated.View entering={FadeIn.duration(300)}>
@@ -76,8 +63,14 @@ export function ConsistencyCard({ challenges }: { challenges: TodayChallenge[] }
         onPress={() => router.push('/week')}
         className="rounded-3xl bg-card px-4 pb-3 pt-4 active:opacity-90"
         accessibilityRole="button"
-        accessibilityLabel={`Your week${line ? `: ${line}` : ''}. Open the weekly check-in`}
+        accessibilityLabel={`${full} of ${week.length} full days this week. Open the weekly check-in`}
       >
+        <View className="mb-3 flex-row items-baseline gap-2">
+          <Text className="font-num-black text-3xl" style={{ color: colors.primary }}>
+            {full}
+          </Text>
+          <Text className="font-sans-semibold text-xs text-muted">of {week.length} full days</Text>
+        </View>
         <View className="flex-row items-end justify-between">
           {week.map((d, i) => {
             const isToday = i === week.length - 1;
@@ -110,7 +103,6 @@ export function ConsistencyCard({ challenges }: { challenges: TodayChallenge[] }
             );
           })}
         </View>
-        {line && <Text className="mt-2 text-center font-sans-semibold">{line}</Text>}
       </Pressable>
     </Animated.View>
   );
