@@ -116,6 +116,7 @@ describe('the PA offers it', () => {
         { id: 'p', label: 'Plank', unit: 'min', done: 2, active: 7, goal: 3, up: 4, down: 2 },
       ],
     });
+    assert.equal(w.best, 'Walk');
     assert.deepEqual(w.levelUp, { challengeId: 'w', label: 'Walk', from: 20, to: 25, unit: 'min' });
     assert.deepEqual(w.focus?.ease, {
       challengeId: 'p',

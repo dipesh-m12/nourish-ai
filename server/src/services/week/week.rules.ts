@@ -159,7 +159,6 @@ export function buildWeek(i: WeekInput): WeekReview {
     .map((h) => ({ ...h, rate: h.done / h.active }));
   const sorted = [...rated].sort((a, b) => b.rate - a.rate);
   const top = sorted[0] && sorted[0].rate > 0 ? sorted[0] : null;
-  const best = top?.label ?? null;
   const change = (h: (typeof rated)[number], to: number | null | undefined): GoalChange | null =>
     h.id && h.goal !== undefined && to != null
       ? { challengeId: h.id, label: h.label, from: h.goal, to, unit: h.unit ?? null }
@@ -167,6 +166,8 @@ export function buildWeek(i: WeekInput): WeekReview {
   // A full week, every day, on a habit that can grow (water and sleep can't): the next step.
   const perfect = rated.find((h) => h.active >= 7 && h.done === h.active && h.up != null);
   const levelUp = perfect ? change(perfect, perfect.up) : null;
+  // The card names the habit its button levels up (never "Best: Water" + a walk button).
+  const best = perfect?.label ?? top?.label ?? null;
   const worst = sorted.length > 1 ? sorted[sorted.length - 1]! : null;
   // Judge a habit only after a few days (day one, today still open, is not "missing" it).
   const focus =
