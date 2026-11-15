@@ -6,8 +6,9 @@ import { addDays } from '../../utils/dates';
  * one that keeps slipping can step down. Pure: the new number comes from the challenge's own
  * step (the numbers rule), never from the AI.
  *
- * A change starts tomorrow. Today, and every day before, keep the goal they were logged
- * against, so a level-up never turns a finished day red or breaks a streak.
+ * A change counts from today (the user said yes now, so today is the first day of the new
+ * goal). Every earlier day keeps the goal it was logged against, so a finished day never
+ * turns red and a streak never breaks; today may reopen ("20 of 25 min"), which is the point.
  */
 
 /** Plenty is plenty: a level-up stops here (per unit), or at twice the first goal. */
@@ -49,11 +50,12 @@ export function changedRecently(t: ChallengeTracking, today: string): boolean {
   return Boolean(last && last.until >= addDays(today, -SETTLE_DAYS));
 }
 
-/** The tracking with a new goal from tomorrow. A second change the same day just replaces it. */
+/** The tracking with a new goal from today. A second change the same day just replaces it. */
 export function withTarget(t: ChallengeTracking, next: number, today: string): ChallengeTracking {
   const levels = t.levels ?? [];
-  if (levels.at(-1)?.until === today) return { ...t, target: next };
-  return { ...t, target: next, levels: [...levels, { until: today, target: t.target }] };
+  const yesterday = addDays(today, -1);
+  if (levels.at(-1)?.until === yesterday) return { ...t, target: next };
+  return { ...t, target: next, levels: [...levels, { until: yesterday, target: t.target }] };
 }
 
 /**

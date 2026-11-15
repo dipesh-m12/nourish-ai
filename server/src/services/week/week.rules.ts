@@ -32,7 +32,7 @@ export interface HabitWeek {
   down?: number | null;
 }
 
-/** A one-tap goal change: from → to, starting tomorrow. */
+/** A one-tap goal change: from → to, starting today. */
 export interface GoalChange {
   challengeId: string;
   label: string;

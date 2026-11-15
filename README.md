@@ -49,7 +49,7 @@ Around them: **burn tracking** (resting + sleep + activity), an **exercise libra
 - **Mochi, a companion cat.** Her mood follows your challenges: purring when the day is done, crying if you missed yesterday, gone after 3 missed days in a row.
 - **Forgiving streaks.** One missed day a week is a rest day: the streak holds, and Mochi tells you she kept it ("just this once"). A streak that dies on one miss is harsher than the habit it's meant to build.
 - **Mochi's room**, drawn in code: every good week (5 of 7 full days) brings her something new (a rug, a cushion, a plant…), and the next item waits as a faint outline. It rewards weeks, not taps, and nothing earned is ever taken away.
-- **Level up:** the day a habit hits a full week in a row, the PA offers the next step in one tap. It starts tomorrow, so finished days stay finished.
+- **Level up:** the day a habit hits a full week in a row, the PA offers the next step in one tap. It counts from today, and days already finished stay finished.
 - **Mochi's garden** for the week, confetti when the day is done, walk and workout **trophy cards you can share**, rolling numbers, haptics.
 - **Mochi's Club** (₹149/month, Razorpay test mode): the free plan gets 5 assistant messages, Club is unlimited. Nothing else is behind the paywall.
 

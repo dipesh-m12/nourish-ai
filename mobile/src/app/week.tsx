@@ -36,7 +36,7 @@ export default function WeekScreen() {
   const shot = useRef<ComponentRef<typeof View>>(null);
   const toast = useToast((s) => s.show);
   const reduceMotion = useReducedMotion();
-  // Goals follow progress: one tap moves it a step, from tomorrow (the server picks the number).
+  // Goals follow progress: one tap moves it a step, from today (the server picks the number).
   const change = (g: GoalChange, direction: 'up' | 'down') =>
     setLevel.mutate(
       { id: g.challengeId, date, direction },

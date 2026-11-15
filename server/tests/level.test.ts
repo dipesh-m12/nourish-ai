@@ -36,10 +36,11 @@ describe('goals that follow progress', () => {
     assert.equal(nextTarget({ ...walk, kind: 'check' }, 'mindset', 'up'), null);
   });
 
-  it('a change starts tomorrow: today and earlier keep their goal', () => {
+  it('a change counts from today; earlier days keep their goal', () => {
     const t = withTarget(walk, 25, TODAY);
     assert.equal(goalOn(t, '2026-11-10'), 20);
-    assert.equal(goalOn(t, TODAY), 20);
+    assert.equal(goalOn(t, '2026-11-14'), 20);
+    assert.equal(goalOn(t, TODAY), 25);
     assert.equal(goalOn(t, '2026-11-16'), 25);
     // A second change the same day replaces the first instead of stacking.
     const again = withTarget(t, 15, TODAY);

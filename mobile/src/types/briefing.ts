@@ -6,7 +6,7 @@ export type BriefingAction =
   | { kind: 'ask'; label: string; prompt: string }
   /** Start one of the plan's ideas. */
   | { kind: 'add_challenge'; label: string; challengeId: string }
-  /** Raise a challenge's goal one step, from tomorrow. */
+  /** Raise a challenge's goal one step, from today. */
   | { kind: 'level_up'; label: string; challengeId: string };
 
 export interface Briefing {

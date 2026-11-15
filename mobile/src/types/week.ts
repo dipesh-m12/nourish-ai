@@ -20,7 +20,7 @@ export interface WeekReview {
   reports: MarkerTrend[];
 }
 
-/** A goal change the server worked out: from → to, starting tomorrow. */
+/** A goal change the server worked out: from → to, starting today. */
 export interface GoalChange {
   challengeId: string;
   label: string;

@@ -67,7 +67,7 @@ export function useUpdateExpiry() {
   });
 }
 
-/** Goals that follow progress: one step up or down, from tomorrow (the server picks the number). */
+/** Goals that follow progress: one step up or down, from today (the server picks the number). */
 export function useSetLevel() {
   const refresh = useRefreshChallenges();
   const queryClient = useQueryClient();
@@ -84,9 +84,9 @@ export function useSetLevel() {
   });
 }
 
-/** "From tomorrow: 25 min" */
+/** "Now 25 min a day" */
 export const levelToast = (r: { to: number; unit: string | null }) =>
-  `From tomorrow: ${r.to}${r.unit ? ` ${r.unit}` : ''}`;
+  `Now ${r.to}${r.unit ? ` ${r.unit}` : ''} a day`;
 
 /** Done with a challenge: off the day, history kept. */
 export function useFinishChallenge() {

@@ -195,8 +195,8 @@ export const challengeGoalService = {
   },
 
   /**
-   * Level up or ease off: the goal moves one step, from tomorrow (today keeps the goal it's
-   * been logged against). The number comes from the challenge's own step, not from the AI.
+   * Level up or ease off: the goal moves one step, from today (earlier days keep theirs).
+   * The number comes from the challenge's own step, not from the AI.
    */
   async setLevel(profileId: string, id: string, date: string, direction: 'up' | 'down') {
     const [row] = await ensureTracking([await owned(profileId, id)]);
@@ -207,7 +207,7 @@ export const challengeGoalService = {
     const unit = tracking.unit ?? '';
     const target = `${next} ${unit}`.trim();
     await db.update(challenges).set({ tracking, target }).where(eq(challenges.id, row!.id));
-    return { id: row!.id, from: before, to: next, unit: tracking.unit, startsOn: addDays(date, 1) };
+    return { id: row!.id, from: before, to: next, unit: tracking.unit, startsOn: date };
   },
 
   /** Done with it: off the day, history kept (logs stay for the weekly look-back). */
