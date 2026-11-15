@@ -238,6 +238,11 @@ export interface ChallengeTracking {
   proof: string;
   /** 1–2 word card label, e.g. "Water", "Walk", "Protein". Older specs may lack it. */
   label?: string;
+  /**
+   * Earlier goals, oldest first: `target` applied up to and including `until`. A level-up
+   * starts tomorrow, so past days keep the goal they were logged against (challenges/level.ts).
+   */
+  levels?: { until: string; target: number }[];
 }
 
 // One verified progress entry (one tap + photo). Daily/weekly totals are sums of these.

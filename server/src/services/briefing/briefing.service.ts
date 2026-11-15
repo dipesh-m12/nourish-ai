@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { generateStructured } from '../ai/ai.service';
 import { buildContext, localClock } from '../agent/agent.context';
+import { levelUpFor } from '../challenges/level';
 import { buildBriefing, type BriefingInput } from './briefing.rules';
 
 /**
@@ -120,6 +121,7 @@ export const briefingService = {
         done: c.progress.done,
         streak: c.progress.streak,
         history: c.progress.history,
+        levelUp: levelUpFor(c, c.progress.streak, date),
       })),
     };
 

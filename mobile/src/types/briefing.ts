@@ -5,7 +5,9 @@ export type BriefingAction =
   | { kind: 'log_challenge'; label: string; challengeId: string }
   | { kind: 'ask'; label: string; prompt: string }
   /** Start one of the plan's ideas. */
-  | { kind: 'add_challenge'; label: string; challengeId: string };
+  | { kind: 'add_challenge'; label: string; challengeId: string }
+  /** Raise a challenge's goal one step, from tomorrow. */
+  | { kind: 'level_up'; label: string; challengeId: string };
 
 export interface Briefing {
   kind:
@@ -20,6 +22,7 @@ export interface Briefing {
     | 'streak_risk'
     | 'open_challenges'
     | 'suggest'
+    | 'level_up'
     | 'on_track';
   greeting: string;
   /** The one thing that matters now (rule-written, exact numbers). */

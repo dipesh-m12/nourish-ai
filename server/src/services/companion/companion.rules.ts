@@ -16,8 +16,8 @@ export type Mood = 'happy' | 'normal' | 'sad' | 'left';
 
 export interface DailyHistory {
   goal: number;
-  /** Oldest first, one entry per day, ending today. */
-  history: { date: string; value: number; active: boolean }[];
+  /** Oldest first, one entry per day, ending today (`goal` = that day's goal). */
+  history: { date: string; value: number; active: boolean; goal?: number }[];
 }
 
 export interface MoodInput {
@@ -41,7 +41,7 @@ function perfect(daily: DailyHistory[], day: string) {
   const active = daily
     .map((c) => ({ c, h: c.history.find((x) => x.date === day) }))
     .filter((x) => x.h?.active);
-  return active.length > 0 && active.every((x) => x.h!.value >= x.c.goal);
+  return active.length > 0 && active.every((x) => x.h!.value >= (x.h!.goal ?? x.c.goal));
 }
 
 /** Did any daily challenge run that day? (Days before the first one don't count as misses.) */
@@ -63,7 +63,7 @@ export function companionMood(i: MoodInput): MoodView {
   const todays = i.daily.map((c) => c.history.at(-1)).filter((h) => h?.active);
   const doneToday = i.daily.filter((c) => {
     const h = c.history.at(-1);
-    return h?.active && h.value >= c.goal;
+    return h?.active && h.value >= (h.goal ?? c.goal);
   }).length;
   const total = todays.length;
 

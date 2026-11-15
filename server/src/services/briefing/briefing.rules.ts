@@ -19,6 +19,7 @@ export type BriefingKind =
   | 'streak_risk'
   | 'open_challenges'
   | 'suggest'
+  | 'level_up'
   | 'on_track';
 
 export type BriefingAction =
@@ -26,7 +27,9 @@ export type BriefingAction =
   | { kind: 'log_challenge'; label: string; challengeId: string }
   | { kind: 'ask'; label: string; prompt: string }
   /** Start one of the plan's ideas (it isn't running yet). */
-  | { kind: 'add_challenge'; label: string; challengeId: string };
+  | { kind: 'add_challenge'; label: string; challengeId: string }
+  /** Raise a challenge's goal one step, from tomorrow. */
+  | { kind: 'level_up'; label: string; challengeId: string };
 
 export interface BriefingChallenge {
   id: string;
@@ -39,8 +42,10 @@ export interface BriefingChallenge {
   goal: number;
   done: boolean;
   streak: number;
-  /** Last days, oldest first; `active` = the challenge existed that day. */
-  history: { date: string; value: number; active: boolean }[];
+  /** Last days, oldest first; `active` = the challenge existed that day, `goal` = that day's. */
+  history: { date: string; value: number; active: boolean; goal?: number }[];
+  /** The next goal the PA may offer after a week hit in a row (null = not now). */
+  levelUp?: number | null;
 }
 
 export interface BriefingInput {
@@ -136,7 +141,7 @@ export function weakSpot(challenges: BriefingChallenge[]): string | null {
       .slice(-7)
       .filter((d) => d.active);
     if (past.length < 3) continue; // too new to call it a habit
-    const done = past.filter((d) => d.value >= c.goal).length;
+    const done = past.filter((d) => d.value >= (d.goal ?? c.goal)).length;
     if (done / past.length >= 0.6) continue;
     if (!worst || done / past.length < worst.done / worst.days) {
       worst = { label: c.label, done, days: past.length };
@@ -161,11 +166,36 @@ export function buildBriefing(i: BriefingInput): Briefing {
   // A plan idea from an area they don't cover yet: what the PA offers when there's room for it.
   const idea = i.suggestions.find((s) => !i.challenges.some((c) => c.category === s.category));
 
+  // A habit just hit a full week in a row (and every 7 days after): offer the next step.
+  const ready = daily.find((c) => c.done && c.levelUp && c.streak >= 7 && c.streak % 7 === 0);
+  const levelUp = ready
+    ? {
+        ...base,
+        kind: 'level_up' as const,
+        headline:
+          `${ready.streak} days of ${ready.label} in a row. Ready for ${fmt(ready.levelUp!)} ${ready.unit ?? ''}?`.replace(
+            ' ?',
+            '?',
+          ),
+        actions: [
+          {
+            kind: 'level_up' as const,
+            label: `Make it ${fmt(ready.levelUp!)} ${ready.unit ?? ''}`.trim(),
+            challengeId: ready.id,
+          },
+        ],
+        why: why('Small steps up are how it keeps working.'),
+        facts: { streak: ready.streak, next: ready.levelUp! },
+      }
+    : null;
+
   // 1. Everything done and calories in range: celebrate. In the evening with lots of room left,
   //    the celebration also makes sure they actually eat (undereating isn't the goal). With few
   //    habits running, it offers one more from an area they don't cover yet.
   if (daily.length > 0 && open.length === 0 && left >= 0) {
     const bigGap = i.hour >= 17 && left > BIG_GAP_KCAL;
+    // A week-long streak today: the step up is the celebration.
+    if (levelUp && !bigGap) return levelUp;
     const oneMore = !bigGap && idea && daily.length < MAX_TO_SUGGEST ? idea : null;
     return {
       ...base,
@@ -326,6 +356,9 @@ export function buildBriefing(i: BriefingInput): Briefing {
       };
     }
   }
+
+  // 7½. A habit hit its week today: the next step, before nudging the rest.
+  if (levelUp) return levelUp;
 
   // 8. Evening, a streak still open today.
   const atRisk = open.filter((c) => c.streak >= 2).sort((a, b) => b.streak - a.streak)[0];

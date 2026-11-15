@@ -67,6 +67,27 @@ export function useUpdateExpiry() {
   });
 }
 
+/** Goals that follow progress: one step up or down, from tomorrow (the server picks the number). */
+export function useSetLevel() {
+  const refresh = useRefreshChallenges();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: string; date: string; direction: 'up' | 'down' }) =>
+      request<{ from: number; to: number; unit: string | null; startsOn: string }>(
+        `/me/challenges/${id}/level`,
+        { method: 'PATCH', body },
+      ),
+    onSuccess: () => {
+      refresh();
+      void queryClient.invalidateQueries({ queryKey: ['week'] });
+    },
+  });
+}
+
+/** "From tomorrow: 25 min" */
+export const levelToast = (r: { to: number; unit: string | null }) =>
+  `From tomorrow: ${r.to}${r.unit ? ` ${r.unit}` : ''}`;
+
 /** Done with a challenge: off the day, history kept. */
 export function useFinishChallenge() {
   const refresh = useRefreshChallenges();

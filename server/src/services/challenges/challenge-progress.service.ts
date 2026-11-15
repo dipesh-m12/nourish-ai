@@ -19,6 +19,7 @@ import { COMPANION_NAME, companionMood } from '../companion/companion.rules';
 import { profileService } from '../profile.service';
 import { mealService } from '../meals/meal.service';
 import { activeChallenges, endedChallenges } from './active';
+import { goalOn, levelUpFor } from './level';
 import { dailyStreak } from './streak';
 import { ensureTracking } from './tracking.service';
 
@@ -79,26 +80,29 @@ function progressView(
       : [...totals.entries()]
           .filter(([d]) => d >= weekStart(today) && d <= today)
           .reduce((sum, [, v]) => sum + v, 0);
+  // Each day keeps its own goal: a level-up never repaints days already done.
   const history = lastNDays(today, HISTORY_DAYS).map((date) => ({
     date,
     value: totals.get(date) ?? 0,
     active: date >= startedOn,
+    goal: goalOn(tracking, date),
   }));
+  const goal = goalOn(tracking, today);
   // A daily challenge misses on a past active day below target (today isn't over yet).
   const missed =
     frequency === 'daily'
-      ? history.filter((h) => h.active && h.date < today && h.value < tracking.target).length
+      ? history.filter((h) => h.active && h.date < today && h.value < h.goal).length
       : 0;
   return {
     value: Math.round(value * 100) / 100,
-    goal: tracking.target,
-    done: value >= tracking.target,
+    goal,
+    done: value >= goal,
     startedOn,
     history,
     streak:
       frequency === 'daily'
         ? dailyStreak(
-            (d) => (totals.get(d) ?? 0) >= tracking.target,
+            (d) => (totals.get(d) ?? 0) >= goalOn(tracking, d),
             today,
             startedOn,
             STREAK_LOOKBACK_DAYS,
@@ -185,9 +189,14 @@ async function periodTotal(challenge: Challenge, date: string) {
  * What one log adds: 1 for done/not-done, else the user's amount (default one step), capped at
  * what's left of the goal so a photo can finish a challenge but never overflow it.
  */
-function loggedAmount(t: ChallengeTracking, requested: number | undefined, soFar: number) {
+function loggedAmount(
+  t: ChallengeTracking,
+  requested: number | undefined,
+  soFar: number,
+  date: string,
+) {
   if (t.kind === 'check') return 1;
-  const left = Math.max(0, t.target - soFar);
+  const left = Math.max(0, goalOn(t, date) - soFar);
   const amount = Math.min(requested ?? t.step, left || t.step);
   return Math.round(amount * 100) / 100;
 }
@@ -392,7 +401,7 @@ export const challengeProgressService = {
       return logAsMeal(profileId, tracked!, date, image);
     }
 
-    const amount = loggedAmount(tracked!.tracking, requested, soFar);
+    const amount = loggedAmount(tracked!.tracking, requested, soFar, date);
     // The log and its burn land together: a walk or a night's sleep moves both at once.
     const burned = await db.transaction(async (tx) => {
       const [row] = await tx

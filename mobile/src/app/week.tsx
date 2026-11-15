@@ -4,12 +4,14 @@ import { ArrowDown, ArrowUp, Check, ChevronLeft, Minus } from 'lucide-react-nati
 import { Pressable, ScrollView, View } from 'react-native';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { levelToast, useSetLevel } from '@/api/challenges';
 import { useWeek } from '@/api/week';
 import { Button } from '@/components/ui/button';
 import { SkeletonBlock, SkeletonGroup } from '@/components/ui/skeleton';
 import { Heading, Text } from '@/components/ui/text';
 import { colors } from '@/constants/colors';
-import type { MarkerFlag, MarkerTrend, WeekReview, WeekStat } from '@/types/week';
+import { useToast } from '@/store/toast';
+import type { GoalChange, MarkerFlag, MarkerTrend, WeekReview, WeekStat } from '@/types/week';
 import { localDate } from '@/utils/date';
 
 const ART: Record<WeekReview['trend'], number> = {
@@ -25,8 +27,17 @@ const ART: Record<WeekReview['trend'], number> = {
  * reports area by area (the slow answer: did iron come back into range?).
  */
 export default function WeekScreen() {
-  const week = useWeek(localDate());
+  const date = localDate();
+  const week = useWeek(date);
+  const setLevel = useSetLevel();
+  const toast = useToast((s) => s.show);
   const reduceMotion = useReducedMotion();
+  // Goals follow progress: one tap moves it a step, from tomorrow (the server picks the number).
+  const change = (g: GoalChange, direction: 'up' | 'down') =>
+    setLevel.mutate(
+      { id: g.challengeId, date, direction },
+      { onSuccess: (r) => toast(levelToast(r)), onError: (err) => toast(err.message) },
+    );
   const enter = (i: number) => (reduceMotion ? undefined : FadeInDown.delay(80 * i).duration(350));
   const w = week.data;
 
@@ -77,15 +88,23 @@ export default function WeekScreen() {
             )}
 
             {w.best && (
-              <Animated.View
-                entering={enter(2)}
-                className="mt-3 flex-row items-center gap-3 rounded-3xl bg-primary-soft p-4"
-              >
-                <Image source={ART.up} style={{ width: 28, height: 36 }} contentFit="contain" />
-                <Text className="flex-1">
-                  <Text className="text-muted">Best habit </Text>
-                  <Text className="font-sans-semibold">{w.best}</Text>
-                </Text>
+              <Animated.View entering={enter(2)} className="mt-3 rounded-3xl bg-primary-soft p-4">
+                <View className="flex-row items-center gap-3">
+                  <Image source={ART.up} style={{ width: 28, height: 36 }} contentFit="contain" />
+                  <Text className="flex-1">
+                    <Text className="text-muted">Best habit </Text>
+                    <Text className="font-sans-semibold">{w.best}</Text>
+                  </Text>
+                </View>
+                {/* Every day this week: the next step, ready to take. */}
+                {w.levelUp && (
+                  <Button
+                    className="mt-3"
+                    label={`Level up: ${goalText(w.levelUp)}`}
+                    loading={setLevel.isPending && setLevel.variables?.direction === 'up'}
+                    onPress={() => change(w.levelUp!, 'up')}
+                  />
+                )}
               </Animated.View>
             )}
 
@@ -95,13 +114,23 @@ export default function WeekScreen() {
                   <Text className="text-muted">Work on </Text>
                   <Text className="font-sans-semibold">{w.focus.label}</Text>
                 </Text>
-                <Button
-                  className="mt-3"
-                  label="Make it easier"
-                  onPress={() =>
-                    router.push({ pathname: '/assistant', params: { prompt: w.focus!.prompt } })
-                  }
-                />
+                {/* One step down in one tap when the habit can move; otherwise Nourish helps. */}
+                {w.focus.ease ? (
+                  <Button
+                    className="mt-3"
+                    label={`Make it ${goalText(w.focus.ease)}`}
+                    loading={setLevel.isPending && setLevel.variables?.direction === 'down'}
+                    onPress={() => change(w.focus!.ease!, 'down')}
+                  />
+                ) : (
+                  <Button
+                    className="mt-3"
+                    label="Make it easier"
+                    onPress={() =>
+                      router.push({ pathname: '/assistant', params: { prompt: w.focus!.prompt } })
+                    }
+                  />
+                )}
               </Animated.View>
             )}
 
@@ -148,6 +177,9 @@ function StatRow({ stat: s, first }: { stat: WeekStat; first: boolean }) {
     </View>
   );
 }
+
+/** "25 min" */
+const goalText = (g: GoalChange) => `${g.to}${g.unit ? ` ${g.unit}` : ''}`;
 
 const FLAG: Record<MarkerFlag, string> = { low: 'Low', high: 'High', normal: 'Normal' };
 

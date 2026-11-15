@@ -42,7 +42,8 @@ export interface TodayChallenge {
     /** First day this challenge counted (local date). */
     startedOn: string;
     /** Last 28 days, oldest first. `active` = on or after startedOn. */
-    history: { date: string; value: number; active: boolean }[];
+    /** `goal` = that day's goal (a level-up starts the next day, so past days keep theirs). */
+    history: { date: string; value: number; active: boolean; goal: number }[];
     streak: number;
     /** Past active days below target (daily challenges). */
     missed: number;

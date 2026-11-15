@@ -61,6 +61,12 @@ export const updateExpirySchema = z.object({
   endsOn: localDate.nullable().optional(),
 });
 
+/** Step a challenge's goal up or down (the new number is computed in code). */
+export const levelSchema = z.object({
+  date: localDate,
+  direction: z.enum(['up', 'down']),
+});
+
 export type CreateChallengesInput = z.infer<typeof createChallengesSchema>;
 export type UpdateExpiryInput = z.infer<typeof updateExpirySchema>;
 

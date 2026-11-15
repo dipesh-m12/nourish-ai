@@ -4,6 +4,7 @@ import { activities, goals, meals, profiles } from '../../db/schema';
 import { AppError } from '../../utils/app-error';
 import { addDays, lastNDays } from '../../utils/dates';
 import { challengeProgressService } from '../challenges/challenge-progress.service';
+import { changedRecently, nextTarget } from '../challenges/level';
 import { signalsService } from '../priorities/signals.service';
 import { buildWeek, type WeekTotals } from './week.rules';
 
@@ -22,7 +23,7 @@ function totals(
     // Each running challenge that day, paired with its own goal.
     const running = daily.flatMap((c) => {
       const h = c.progress.history.find((x) => x.date === date);
-      return h?.active ? [{ value: h.value, goal: c.progress.goal }] : [];
+      return h?.active ? [{ value: h.value, goal: h.goal }] : [];
     });
     if (!running.length) continue;
     activeDays++;
@@ -101,10 +102,17 @@ export const weekService = {
       .filter((c) => c.frequency === 'daily')
       .map((c) => {
         const week = c.progress.history.filter((h) => thisDays.includes(h.date) && h.active);
+        // A goal changed in the last week gets time to settle before the next change.
+        const settled = !changedRecently(c.tracking, date);
         return {
+          id: c.id,
           label: c.tracking.label ?? c.title,
-          done: week.filter((h) => h.value >= c.progress.goal).length,
+          unit: c.tracking.kind === 'check' ? null : c.tracking.unit,
+          done: week.filter((h) => h.value >= h.goal).length,
           active: week.length,
+          goal: c.progress.goal,
+          up: settled ? nextTarget(c.tracking, c.category, 'up') : null,
+          down: settled ? nextTarget(c.tracking, c.category, 'down') : null,
         };
       });
 

@@ -72,6 +72,12 @@ export const challengeController = {
     res.json(await challengeGoalService.updateExpiry(authedProfileId(req), id, req.body));
   },
 
+  async setLevel(req: Request<{ id: string }>, res: Response) {
+    const { id } = parse(challengeIdParamSchema, req.params);
+    const { date, direction } = req.body;
+    res.json(await challengeGoalService.setLevel(authedProfileId(req), id, date, direction));
+  },
+
   async finish(req: Request<{ id: string }>, res: Response) {
     const { id } = parse(challengeIdParamSchema, req.params);
     await challengeGoalService.finish(authedProfileId(req), id);

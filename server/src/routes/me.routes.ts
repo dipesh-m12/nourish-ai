@@ -32,6 +32,7 @@ import {
   setRemindersSchema,
   syncProgressSchema,
   updateExpirySchema,
+  levelSchema,
 } from '../validators/challenge.validator';
 import {
   analyzeMealSchema,
@@ -75,6 +76,8 @@ router.patch(
   challengeController.updateExpiry,
 );
 router.post('/challenges/:id/finish', challengeController.finish);
+// Goals that follow progress: one step up after a strong week, one down when it keeps slipping.
+router.patch('/challenges/:id/level', validateBody(levelSchema), challengeController.setLevel);
 router.put('/challenges/:id/place', validateBody(placeSchema), challengeController.setPlace);
 router.put(
   '/challenges/:id/reminder',

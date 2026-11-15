@@ -6,6 +6,7 @@ import { ActivityIndicator, Pressable, RefreshControl, ScrollView, View } from '
 import Animated, { FadeInDown, LinearTransition } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBriefing } from '@/api/briefing';
+import { levelToast, useSetLevel } from '@/api/challenges';
 import { useAcceptChallenges, usePlan } from '@/api/plan';
 import { useMe, useSetShowAgent } from '@/api/profiles';
 import { useToday } from '@/api/today';
@@ -157,6 +158,7 @@ export default function DashboardScreen() {
   // The PA's "Add it": starts one plan idea next to the ones already running.
   const plan = usePlan();
   const accept = useAcceptChallenges();
+  const setLevel = useSetLevel();
   const addChallenge = (id: string) => {
     const running = (plan.data?.challenges ?? []).filter((c) => c.accepted).map((c) => c.id);
     accept.mutate([...running, id], {
@@ -174,6 +176,11 @@ export default function DashboardScreen() {
     if (a.kind === 'ask')
       return router.push({ pathname: '/assistant', params: { prompt: a.prompt } });
     if (a.kind === 'add_challenge') return addChallenge(a.challengeId);
+    if (a.kind === 'level_up')
+      return setLevel.mutate(
+        { id: a.challengeId, date, direction: 'up' },
+        { onSuccess: (r) => toast(levelToast(r)), onError: (err) => toast(err.message) },
+      );
     const c = today.data?.challenges.find((x) => x.id === a.challengeId);
     if (c) logChallenge(c);
   };

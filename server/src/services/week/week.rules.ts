@@ -23,6 +23,22 @@ export interface HabitWeek {
   label: string;
   done: number;
   active: number;
+  /** For one-tap goal changes (optional: older callers and tests may leave them out). */
+  id?: string;
+  unit?: string | null;
+  /** Today's goal, and the next one up / down when the habit can move (null = it can't). */
+  goal?: number;
+  up?: number | null;
+  down?: number | null;
+}
+
+/** A one-tap goal change: from → to, starting tomorrow. */
+export interface GoalChange {
+  challengeId: string;
+  label: string;
+  from: number;
+  to: number;
+  unit: string | null;
 }
 
 export interface WeekInput {
@@ -47,7 +63,10 @@ export interface WeekReview {
   headline: string;
   stats: WeekStat[];
   best: string | null;
-  focus: { label: string; prompt: string } | null;
+  /** Every day this week: the step up, ready to take. */
+  levelUp: GoalChange | null;
+  /** `ease` = the step down in one tap when the habit can move; else the prompt asks Nourish. */
+  focus: { label: string; prompt: string; ease: GoalChange | null } | null;
 }
 
 const round = (n: number, d = 0) => Math.round(n * 10 ** d) / 10 ** d;
@@ -139,7 +158,14 @@ export function buildWeek(i: WeekInput): WeekReview {
     .filter((h) => h.active > 0)
     .map((h) => ({ ...h, rate: h.done / h.active }));
   const sorted = [...rated].sort((a, b) => b.rate - a.rate);
-  const best = sorted[0] && sorted[0].rate > 0 ? sorted[0].label : null;
+  const top = sorted[0] && sorted[0].rate > 0 ? sorted[0] : null;
+  const best = top?.label ?? null;
+  const change = (h: (typeof rated)[number], to: number | null | undefined): GoalChange | null =>
+    h.id && h.goal !== undefined && to != null
+      ? { challengeId: h.id, label: h.label, from: h.goal, to, unit: h.unit ?? null }
+      : null;
+  // A full week, every day: the goal can grow (from tomorrow).
+  const levelUp = top && top.active >= 7 && top.done === top.active ? change(top, top.up) : null;
   const worst = sorted.length > 1 ? sorted[sorted.length - 1]! : null;
   // Judge a habit only after a few days (day one, today still open, is not "missing" it).
   const focus =
@@ -147,8 +173,9 @@ export function buildWeek(i: WeekInput): WeekReview {
       ? {
           label: worst.label,
           prompt: `I keep missing "${worst.label}" (${worst.done} of ${worst.active} days). Make it easier for me.`,
+          ease: change(worst, worst.down),
         }
       : null;
 
-  return { trend, headline, stats: shown, best, focus };
+  return { trend, headline, stats: shown, best, levelUp, focus };
 }

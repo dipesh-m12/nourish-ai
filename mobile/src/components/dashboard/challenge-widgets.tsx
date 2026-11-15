@@ -150,7 +150,7 @@ export function CheckWidget({ c }: { c: TodayChallenge }) {
               style={{
                 backgroundColor: !h.active
                   ? '#ECEAE4'
-                  : h.value >= c.progress.goal
+                  : h.value >= h.goal
                     ? theme.mark
                     : theme.track,
               }}

@@ -24,7 +24,7 @@ function summarise(challenges: TodayChallenge[]): DaySummary[] {
       const h = c.progress.history[i];
       if (!h?.active) continue;
       active++;
-      if (h.value >= c.progress.goal) done++;
+      if (h.value >= h.goal) done++;
     }
     return { date, active, done };
   });

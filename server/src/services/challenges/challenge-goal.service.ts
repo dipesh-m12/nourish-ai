@@ -14,6 +14,8 @@ import { GOAL_SYSTEM_PROMPT, goalProposalSchema } from './challenge-goal.prompt'
 import { signalsService } from '../priorities/signals.service';
 import { duplicates } from './duplicate';
 import { endsOnFor, extendBy } from './expiry';
+import { goalOn, nextTarget, withTarget } from './level';
+import { ensureTracking } from './tracking.service';
 
 /** More than this on one day stops being doable; the app asks to finish one first. */
 const MAX_ACTIVE = 8;
@@ -190,6 +192,22 @@ export const challengeGoalService = {
     const row = await owned(profileId, id);
     await db.update(challenges).set({ place }).where(eq(challenges.id, row.id));
     return { id: row.id, place };
+  },
+
+  /**
+   * Level up or ease off: the goal moves one step, from tomorrow (today keeps the goal it's
+   * been logged against). The number comes from the challenge's own step, not from the AI.
+   */
+  async setLevel(profileId: string, id: string, date: string, direction: 'up' | 'down') {
+    const [row] = await ensureTracking([await owned(profileId, id)]);
+    const before = goalOn(row!.tracking, date);
+    const next = nextTarget(row!.tracking, row!.category, direction);
+    if (next === null) throw new AppError(400, 'This one stays as it is');
+    const tracking = withTarget(row!.tracking, next, date);
+    const unit = tracking.unit ?? '';
+    const target = `${next} ${unit}`.trim();
+    await db.update(challenges).set({ tracking, target }).where(eq(challenges.id, row!.id));
+    return { id: row!.id, from: before, to: next, unit: tracking.unit, startsOn: addDays(date, 1) };
   },
 
   /** Done with it: off the day, history kept (logs stay for the weekly look-back). */
