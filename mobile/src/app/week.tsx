@@ -161,37 +161,33 @@ export default function WeekScreen() {
 }
 
 /**
- * Stocks-style: the label, this week's value, and the move since last week as a small coloured
- * pill (green = the right way, coral = not). The sign says which way it moved; the colour says
- * whether that's good (fewer calories can be green).
+ * Stocks-style and short: the label and only the move since last week, as a small coloured pill
+ * (green = the right way, coral = not; the sign says which way). With nothing to compare yet,
+ * or no change, the value itself shows instead. Screen readers get the full sentence.
  */
 function StatRow({ stat: s, first }: { stat: WeekStat; first: boolean }) {
   const good = s.better === true;
   return (
     <View
-      className={`flex-row items-center gap-3 px-4 py-3.5 ${first ? '' : 'border-t border-line'}`}
+      className={`flex-row items-center px-4 py-3.5 ${first ? '' : 'border-t border-line'}`}
       accessible
       accessibilityLabel={`${s.label}: ${s.now}${s.before ? `, last week ${s.before}` : ''}${
         s.better === null ? '' : s.better ? ', better' : ', worse'
       }`}
     >
       <Text className="flex-1 text-muted">{s.label}</Text>
-      <Text className="font-sans-semibold text-base">{s.now}</Text>
-      {/* Fixed width so the values line up like a ticker column. */}
-      <View className="w-16 items-end">
-        {s.change && (
-          <View
-            className={`rounded-full px-2 py-0.5 ${good ? 'bg-primary-soft' : 'bg-accent-soft'}`}
+      {s.change ? (
+        <View className={`rounded-full px-2.5 py-1 ${good ? 'bg-primary-soft' : 'bg-accent-soft'}`}>
+          <Text
+            className="font-sans-semibold text-sm"
+            style={{ color: good ? colors.primary : colors.accentText }}
           >
-            <Text
-              className="font-sans-semibold text-xs"
-              style={{ color: good ? colors.primary : colors.accentText }}
-            >
-              {s.change}
-            </Text>
-          </View>
-        )}
-      </View>
+            {s.change}
+          </Text>
+        </View>
+      ) : (
+        <Text className="font-sans-semibold">{s.now}</Text>
+      )}
     </View>
   );
 }
