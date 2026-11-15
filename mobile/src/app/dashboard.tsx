@@ -35,6 +35,7 @@ import { RemindersSheet } from '@/components/challenges/reminders-sheet';
 import { ProfileAvatar } from '@/components/profile-avatar';
 import { Button } from '@/components/ui/button';
 import { PressableScale } from '@/components/ui/pressable-scale';
+import { SectionLabel } from '@/components/ui/section-label';
 import { Heading, Text } from '@/components/ui/text';
 import { colors } from '@/constants/colors';
 import { useOnboarding } from '@/store/onboarding';
@@ -323,9 +324,7 @@ export default function DashboardScreen() {
           entering={FadeInDown.delay(160).duration(400)}
           className="mb-3 mt-8 flex-row items-center justify-between"
         >
-          <Text className="font-sans-semibold text-sm uppercase tracking-wider text-muted">
-            Challenges
-          </Text>
+          <SectionLabel>Challenges</SectionLabel>
           <View className="flex-row gap-3">
             {challenges.length > 0 && (
               <PressableScale

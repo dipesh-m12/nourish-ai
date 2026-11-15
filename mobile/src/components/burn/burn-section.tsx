@@ -1,6 +1,6 @@
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { View } from 'react-native';
-import { Text } from '@/components/ui/text';
+import { SectionLabel } from '@/components/ui/section-label';
 import type { Burn } from '@/types/burn';
 import { BurnCard } from './burn-card';
 import { WeekChart } from './week-chart';
@@ -21,7 +21,7 @@ export function BurnSection({ burn, date, delay }: Props) {
     <View>
       {/* Same header style and spacing as "Challenges" above. */}
       <Animated.View entering={FadeInDown.delay(delay).duration(400)} className="mb-3">
-        <Text className="font-sans-semibold text-sm uppercase tracking-wider text-muted">Move</Text>
+        <SectionLabel>Move</SectionLabel>
       </Animated.View>
 
       <Animated.View entering={FadeInDown.delay(delay + 80).duration(400)} className="gap-3">
