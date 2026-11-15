@@ -28,8 +28,8 @@ function Ring({ delay }: { delay: number }) {
 }
 
 /**
- * "You can tap this": two soft rings pulsing out of a dot, like a finger tap. Decorative only
- * (the card itself carries the label). Reduced motion: the rings stand still.
+ * "You can tap this": two soft ink rings pulsing out of a hollow fingertip ring, like a tap.
+ * Decorative only (the card itself carries the label). Reduced motion: the rings stand still.
  */
 export function TapHint() {
   const reduceMotion = useReducedMotion();
@@ -43,7 +43,8 @@ export function TapHint() {
           <Ring delay={500} />
         </>
       )}
-      <View style={styles.dot} />
+      {/* The fingertip: a still ring, hollow (no filled dot). */}
+      <View style={styles.tip} />
     </View>
   );
 }
@@ -55,8 +56,15 @@ const styles = StyleSheet.create({
     width: SIZE,
     height: SIZE,
     borderRadius: SIZE / 2,
-    borderWidth: 2,
-    borderColor: colors.primary,
+    borderWidth: 1.5,
+    borderColor: colors.ink,
   },
-  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary },
+  tip: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    borderWidth: 1.5,
+    borderColor: colors.ink,
+    opacity: 0.55,
+  },
 });
