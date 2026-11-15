@@ -161,6 +161,7 @@ export default function DashboardScreen() {
   const accept = useAcceptChallenges();
   const setLevel = useSetLevel();
   const addChallenge = (id: string) => {
+    if (accept.isPending) return; // a double tap adds it once
     const running = (plan.data?.challenges ?? []).filter((c) => c.accepted).map((c) => c.id);
     accept.mutate([...running, id], {
       onSuccess: () => {

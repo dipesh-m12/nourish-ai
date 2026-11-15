@@ -1,11 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
-import { ArrowRight, ChevronDown, PawPrint } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
+import { ArrowRight, PawPrint, Plus } from 'lucide-react-native';
+import { useEffect } from 'react';
 import { Pressable, View } from 'react-native';
+import Svg, { Line } from 'react-native-svg';
 import Animated, { FadeIn, FadeInDown, LinearTransition } from 'react-native-reanimated';
 import { CatFace } from '@/components/companion/cat-face';
-import { Button } from '@/components/ui/button';
 import { PressableScale } from '@/components/ui/pressable-scale';
 import { SkeletonBlock, SkeletonGroup } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
@@ -90,8 +90,8 @@ export function BriefingCard({
         ) : null}
 
         {b.suggestion && (
-          <SuggestionRow
-            suggestion={b.suggestion}
+          <ReadyRow
+            title={b.suggestion.title}
             onAdd={() =>
               onAction({ kind: 'add_challenge', label: 'Add it', challengeId: b.suggestion!.id })
             }
@@ -129,52 +129,41 @@ export function BriefingCard({
 }
 
 /**
- * The PA's offer, kept short: name and amount on a row; tapping it opens why it helps and the
- * one button that adds it. The headline above stays a single short question.
+ * The PA's offer: a dashed line off the card's message, then one row, "Ready for X?", with a
+ * plus. The whole row adds it (one tap, nothing to open).
  */
-function SuggestionRow({
-  suggestion: s,
-  onAdd,
-}: {
-  suggestion: NonNullable<Briefing['suggestion']>;
-  onAdd: () => void;
-}) {
-  const [open, setOpen] = useState(false);
+function ReadyRow({ title, onAdd }: { title: string; onAdd: () => void }) {
   return (
-    <Animated.View
-      layout={LinearTransition.duration(250)}
-      className="mt-4 overflow-hidden rounded-2xl bg-bg"
-    >
+    <View className="mt-4">
+      {/* A dashed rule (RN can't dash a single border side reliably on Android). */}
+      <Svg height={1} width="100%">
+        <Line
+          x1="0"
+          y1="0.5"
+          x2="100%"
+          y2="0.5"
+          stroke={colors.line}
+          strokeWidth={1}
+          strokeDasharray="4 4"
+        />
+      </Svg>
       <Pressable
-        onPress={() => setOpen((o) => !o)}
+        onPress={() => {
+          Haptics.selectionAsync();
+          onAdd();
+        }}
         accessibilityRole="button"
-        accessibilityState={{ expanded: open }}
-        accessibilityLabel={`${s.title}, ${s.target}`}
-        className="min-h-12 flex-row items-center gap-3 px-4 py-3 active:opacity-80"
+        accessibilityLabel={`Add ${title}`}
+        className="mt-4 flex-row items-center gap-3 active:opacity-80"
       >
-        <View className="flex-1">
-          <Text className="font-sans-semibold" numberOfLines={1}>
-            {s.title}
-          </Text>
-          <Text className="text-sm text-muted" numberOfLines={1}>
-            {s.target}
-          </Text>
-        </View>
-        <View style={{ transform: [{ rotate: open ? '180deg' : '0deg' }] }}>
-          <ChevronDown size={18} color={colors.muted} />
+        <Text className="flex-1 font-sans-semibold" numberOfLines={2}>
+          Ready for {title}?
+        </Text>
+        <View className="h-9 w-9 items-center justify-center rounded-full bg-ink">
+          <Plus size={18} color="#fff" />
         </View>
       </Pressable>
-      {open && (
-        <Animated.View entering={FadeIn.duration(200)} className="px-4 pb-4">
-          {s.why ? (
-            <Text className="text-sm leading-5 text-muted" numberOfLines={2}>
-              {s.why}
-            </Text>
-          ) : null}
-          <Button className="mt-3" label="Add it" onPress={onAdd} />
-        </Animated.View>
-      )}
-    </Animated.View>
+    </View>
   );
 }
 

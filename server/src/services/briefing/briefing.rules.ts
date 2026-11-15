@@ -215,7 +215,7 @@ export function buildBriefing(i: BriefingInput): Briefing {
       headline: bigGap
         ? `Every challenge done today. You still have ${left} kcal: make dinner a proper one, with ${proteinIdeas(i.diet, i.allergies)[0] ?? 'protein'}.`
         : oneMore
-          ? 'Every challenge done today. Ready for one more?'
+          ? 'Every challenge done today.'
           : `Every challenge done today, and ${left} kcal still in hand. That's a full day.`,
       actions: bigGap ? [{ kind: 'log_meal', label: 'Log dinner' }] : [],
       suggestion: oneMore,
@@ -402,7 +402,7 @@ export function buildBriefing(i: BriefingInput): Briefing {
     return {
       ...base,
       kind: 'suggest',
-      headline: 'Something new to try?',
+      headline: 'All good for now.',
       actions: [],
       why: why('One small habit at a time adds up.'),
       facts: { left },
