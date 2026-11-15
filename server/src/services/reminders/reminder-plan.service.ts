@@ -93,6 +93,7 @@ export const reminderPlanService = {
         .select({
           id: challenges.id,
           title: challenges.title,
+          target: challenges.target,
           category: challenges.category,
           frequency: challenges.frequency,
           remindAt: challenges.remindAt,
