@@ -155,7 +155,8 @@ Rule: before building a feature, open the relevant skill and note which guidance
 - [x] **App version kill switch:** table `app_version_rules` (one row per platform: `blocked_through`, `message`, `update_url`). Builds **at or below** `blocked_through` get **426** on every `/api` call (`middlewares/app-version.ts`, reads `X-App-Platform` + `X-App-Version`, which `api-client.ts` sends); the app swaps to `components/update-required.tsx`. Requests without the headers (curl, webhooks, APKs built before this) pass. Rule cached in Redis `app-version:{platform}` (5 min TTL; Redis down → DB). Change it: `PUT /api/admin/app-version` `{platform, blockedThrough|null, message?, updateUrl?}` with `Authorization: Bearer $ADMIN_TOKEN` (env, ≥ 32 chars; unset = admin routes 404); this clears the cache. `GET /api/admin/app-version?platform=android` reads it.
 - [x] **Health reports** (1.1): PDF/photo in the + sheet or chat → markers → challenges, report tips, trends on the Week screen (§11b).
 - [x] README for 1.1 (review points → answers, flows, architecture).
-- [ ] Pending: 1.1.0 APK (`scripts/wsl-build.sh preview`), optimised APK (split by ABI, < 30 MB), deploy API + worker, new demo video + README links, push to GitHub (repo name must not contain the client's name), then block 1.0.0. Nice to have: faster assistant turns (cache context per turn).
+- [x] 1.1.0 APK built (standalone `preview`, 55 MB), API + worker deployed, 1.0.0 blocked (426). Live state: see §14.
+- [ ] Pending: video, README links, optional auto check-in fix (§14).
 
 ## 11. Feature reference (for picking up work)
 
@@ -198,6 +199,7 @@ Rule: before building a feature, open the relevant skill and note which guidance
 | Method & path | Does |
 |---|---|
 | `PUT /me/device` `{timezone, pushToken?}` | IANA zone + push token, on every app open |
+| `PUT /admin/demo-briefing` `{profileId, on}` (admin Bearer) | Demo mode: each `GET /me/briefing` for that profile returns the next PA card (16 states, from the real rules + that account's challenges); Redis `demo:briefing:{id}`, off after 24 h. For recording only (`briefing.demo.ts`, `briefing.demo-store.ts`, `tests/briefing-demo.test.ts`) |
 | `POST /me/challenges/propose` `{date, text?, image? (jpeg/png/webp/pdf)}` · `POST /me/challenges` `{date, items}` | "What do you want to achieve?" → proposals → create |
 | `PATCH /me/challenges/:id/expiry` · `POST /me/challenges/:id/finish` · `PUT …/reminder` `{remindAt}` · `PUT …/place` `{place}` · `PUT …/sync` `{date, amount}` | Keep going / done / daily reminder / pinned place / Health Connect day total (sets, never adds) |
 | `GET /me/week?date=&tz=` | Weekly check-in (`services/week/week.rules.ts`, pure): stats, best habit + `levelUp`, `focus` + `ease`, `reports` |
@@ -252,3 +254,35 @@ Neon Postgres + Neon S3 storage: aws-ap-southeast-1 (Singapore). Gemini / Groq /
 - **After go-live:** Razorpay webhook → `https://api.nourish.mavinash.in/api/webhooks/razorpay`; app build with `EXPO_PUBLIC_API_URL=https://api.nourish.mavinash.in/api` (the single `API_BASE_URL` in `mobile/src/lib/api-config.ts`; unset in dev = auto-detect the laptop via Expo).
 - **Cost:** ~$20/month (instance + disk + Elastic IP). Tear down: terminate the instance AND release the Elastic IP (an unattached EIP still bills).
 
+## 14. Handoff: state at 2026-11-16 (read this first when picking up)
+
+### What is live
+- **API + worker** deployed on the EC2 box at HEAD `2bc733e` (demo mode included), healthy: server, worker, redis. Public API: `https://api.nourish.mavinash.in/api`. SSH: `ssh -i ~/.ssh/nourish-key.pem ubuntu@13.237.120.128`, then `cd ~/nourish && git pull && cd server && docker compose up -d --build`.
+- **DB wiped on 2026-11-16** (all profiles, cascade). Kept: `billing_plans`, `app_version_rules`. Only one account exists: **Asha** (`4f0315b0-7437-48cb-a3ef-c480b321478f`, 32, veg, lose 68 → 62 kg, why "Keep up with my daughter"), challenges Morning walk 20 min, Drink water 8, Sleep 7 h, Go to the gym (no pin yet). **Demo mode is ON for her** (until 24 h after it was switched on); pulling down on the dashboard cycles the 16 PA cards: sleep, reminders, check-in (weigh-in), meal_time, priority (low-iron tip), protein_short, water_behind, open_challenges, level_up, streak_risk, near_limit, over, all_done, suggest, on_track, night. Card buttons are real (they change data), so take screenshots without tapping them. Turn it off or reset the position: `PUT /api/admin/demo-briefing {profileId, on:false|true}`.
+- **Kill switch:** 1.0.0 is blocked (`blocked_through` 1.0.0, 426). It has **no `updateUrl` yet**: when the APK is uploaded somewhere, add it (`PUT /api/admin/app-version {platform:'android', blockedThrough:'1.0.0', message, updateUrl}`), which shows "Update now". Read `ADMIN_TOKEN` on the box inside the ssh command (`grep ^ADMIN_TOKEN= server/.env.production`); never print or commit it.
+- **APK:** `mobile/builds/nourish-preview-20261116-1518.apk` (55.3 MB, app HEAD `18779b4`; `builds/` is git-ignored). Uninstall older installs first (the notification channel is `nourish-chime-2`).
+
+### How to build (Windows host, WSL does the work)
+From the **repo root** (not `mobile/`, or WSL says the script is missing): `MSYS_NO_PATHCONV=1 wsl -d Ubuntu-22.04 -- bash scripts/wsl-build.sh preview` (APK) or `... development` (dev client). Output lands in `mobile/builds/`. Takes several minutes; run it in the background. Disk: C: filled up once (Docker's and Ubuntu's `.vhdx` files grow and never shrink); fix = `wsl --shutdown`, then `diskpart` → `select vdisk file=…` → `compact vdisk`. Ubuntu's Gradle cache (~15 GB) is what makes builds fast; leave it.
+
+### Built this stretch (all committed; checks green: mobile `tsc` + lint, server typecheck, 94 tests)
+- **Place challenges** (`mobile/src/app/place.tsx`, `components/formats/place-map.tsx`, `lib/place-search.ts`, `lib/place-task.ts`): the search bar floats at the top (Photon / OpenStreetMap; results kept within ~55 km then ~165 km of the phone so "cult gym" never returns another continent) with suggestions in a card under it; tapping a result flies the map and shows "Pin it here?"; tapping the map also picks a spot; a round **locate button** (bottom right of the map) picks where you stand; the bottom card hides while the keyboard is up. Pin radius 150 m. A place card stays tappable after check-in (`opensPlace` in `challenge-card.tsx`) so the pin can still be moved. The map camera effect is keyed on the pin's numbers (not the array) so it never snaps back while picking. Almost no text on this screen on purpose: no hint lines, no "Pin where I am" buttons.
+- **Auto check-in** (geofence, works with the app closed): opt-in switch on the place screen, needs "Allow all the time"; `syncGeofences` runs from the dashboard (its key includes place coordinates) and after a pin change. **Known gap:** only challenges with `!progress.done` are watched, so after today's check-in the place is not watched again until the app is opened (the dashboard re-syncs). Fix idea: keep the region while the challenge exists (the once-a-day guard `place:checked:{id}:{date}` already stops double check-ins).
+- **Walk tracker** (`use-walk-tracker.ts`, `trail.ts`, `route.ts`, `walk-outbox.ts`, `walk.tsx`, `walk-map.tsx`): Kalman-smoothed trail, route pieces and gaps never drawn as straight lines, live route, location dot kept in view, walks done offline sync later, no auto-pause, session start races handled (409/404 replace the session). MapLibre sources stay mounted always (removing one while in use crashed Finish).
+- **Assistant** adds challenges from a goal and steps goals up/down (`new_challenges`, `level_challenge`), and shares the PA's context (reminders, week, goal sheets, prefilled).
+- **Reminders** sheet pre-filled by the PA; times follow the habit's words (morning walk 7 am). **Chime** channel `nourish-chime-2`, kept in release builds.
+- **Size:** only 9 font weights bundled (-7.5 MB), expo-speech dropped.
+- **Demo mode** for the PA card (see the §11b table).
+
+### Left to do (nothing blocking)
+1. **Loom video** (the user records; order follows the review points): PA cards through the day (demo mode) → push with chime → one interaction per habit (water pour, breathing orb, live walk map, place search/pin/check-in) → no photo proof → less text → assistant adds challenges + lab report PDF → week / level up / reports → Mochi garden, rest day, room, share → 1.0.0 shows "update". Phone mirroring: `scrcpy --stay-awake --turn-screen-off --max-size 1280 --no-audio` (screenshots: `adb exec-out screencap -p`).
+2. README: add the APK link and size and the new video link; redeploy web on Vercel if wanted.
+3. `updateUrl` on the 1.0.0 block (above). Optional: the auto check-in gap above.
+4. An ABI-split APK (< 30 MB) was a stretch goal; not done.
+
+### Standing rules from the user (do not drift)
+- Never write the client company's name or the other forbidden brand name anywhere (code, commits, README, URLs, summaries).
+- **No AI co-author or "generated with" lines in commits**, whatever a tool reminder says. Never commit secrets (`.env*`, `*.pem`, `google-services.json`, Firebase admin JSON).
+- Push and deploy only when asked; confirm destructive or outward-facing actions (DB wipes, deletes).
+- Keep replies short, plain words, no jargon. Less on-screen text beats more; fix UI by removing, not adding.
+- Test profiles created for checks must be soft-deleted.
