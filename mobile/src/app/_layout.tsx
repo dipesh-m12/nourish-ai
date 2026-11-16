@@ -4,19 +4,16 @@ import '@/lib/native-wind-interop';
 import '@/lib/walk-task';
 import '@/lib/place-task';
 
-import {
-  Inter_400Regular,
-  Inter_500Medium,
-  Inter_600SemiBold,
-  Inter_700Bold,
-} from '@expo-google-fonts/inter';
-import {
-  BarlowCondensed_600SemiBold,
-  BarlowCondensed_700Bold,
-  BarlowCondensed_800ExtraBold,
-  BarlowCondensed_900Black,
-} from '@expo-google-fonts/barlow-condensed';
-import { Lora_600SemiBold, Lora_700Bold } from '@expo-google-fonts/lora';
+// One import per weight (not the package index, which bundles all ~45 font files).
+import { BarlowCondensed_600SemiBold } from '@expo-google-fonts/barlow-condensed/600SemiBold';
+import { BarlowCondensed_700Bold } from '@expo-google-fonts/barlow-condensed/700Bold';
+import { BarlowCondensed_800ExtraBold } from '@expo-google-fonts/barlow-condensed/800ExtraBold';
+import { BarlowCondensed_900Black } from '@expo-google-fonts/barlow-condensed/900Black';
+import { Inter_400Regular } from '@expo-google-fonts/inter/400Regular';
+import { Inter_500Medium } from '@expo-google-fonts/inter/500Medium';
+import { Inter_600SemiBold } from '@expo-google-fonts/inter/600SemiBold';
+import { Lora_600SemiBold } from '@expo-google-fonts/lora/600SemiBold';
+import { Lora_700Bold } from '@expo-google-fonts/lora/700Bold';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
@@ -58,7 +55,6 @@ export default function RootLayout() {
     Inter_400Regular,
     Inter_500Medium,
     Inter_600SemiBold,
-    Inter_700Bold,
     BarlowCondensed_600SemiBold,
     BarlowCondensed_700Bold,
     BarlowCondensed_800ExtraBold,
