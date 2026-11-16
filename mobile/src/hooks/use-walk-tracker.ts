@@ -132,8 +132,6 @@ export function useWalkTracker() {
    * second start cancels the first, which is how walks ended up "already ended" on Finish.
    */
   const starting = useRef(false);
-  /** Dev builds: a pretend walk feeds the tracker instead of the real GPS (see simulate). */
-  const simulating = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const publish = useCallback(() => {
     const s = ref.current;
@@ -290,7 +288,7 @@ export function useWalkTracker() {
         // A fix a second: corners of a small loop need it (the route filters the noise).
         { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 0 },
         ({ coords, timestamp }) => {
-          if (!live || simulating.current) return;
+          if (!live) return;
           takeFix(
             {
               lng: coords.longitude,
@@ -333,7 +331,7 @@ export function useWalkTracker() {
       // Background fixes that arrived while the screen was on (service mode).
       if (cur.background)
         void drainFixes().then((fixes) => {
-          if (!simulating.current) for (const f of fixes) takeFix(f, true);
+          for (const f of fixes) takeFix(f, true);
         });
       const delta = now - cur.lastTickAt;
       cur.lastTickAt = now;
@@ -455,62 +453,8 @@ export function useWalkTracker() {
     publish();
   };
 
-  const [simulated, setSimulated] = useState(false);
-  const stopSimulation = () => {
-    if (simulating.current) clearInterval(simulating.current);
-    simulating.current = null;
-    setSimulated(false);
-  };
-
-  /**
-   * Dev builds only: a pretend walk, so the whole flow (route, auto-pause, checkpoints, Finish
-   * and the log) can be checked without going outside. Walks a 30 x 20 m loop around the last
-   * known position at 1.3 m/s, one fix (with a little jitter) and two steps a second, through
-   * the same takeFix as the real GPS, which is ignored meanwhile.
-   */
-  const simulate = async () => {
-    if (!__DEV__ || simulating.current || !ref.current) return;
-    const here = await Location.getLastKnownPositionAsync().catch(() => null);
-    const lat0 = here?.coords.latitude ?? 28.6139;
-    const lng0 = here?.coords.longitude ?? 77.209;
-    const mLng = 111_320 * Math.cos((lat0 * Math.PI) / 180);
-    const [W, H, speed] = [30, 20, 1.3];
-    const per = 2 * (W + H);
-    let along = 0;
-    const jitter = () => (Math.random() - 0.5) * 4;
-    setSimulated(true);
-    simulating.current = setInterval(() => {
-      const s = ref.current;
-      if (!s) return stopSimulation();
-      if (s.status !== 'running') return;
-      along = (along + speed) % per;
-      let d = along;
-      let x: number;
-      let y: number;
-      if (d < W) [x, y] = [d, 0];
-      else if ((d -= W) < H) [x, y] = [W, d];
-      else if ((d -= H) < W) [x, y] = [W - d, H];
-      else [x, y] = [0, H - (d - W)];
-      const now = Date.now();
-      takeFix(
-        {
-          lng: lng0 + (x + jitter()) / mLng,
-          lat: lat0 + (y + jitter()) / 111_320,
-          acc: 8,
-          t: now,
-          speed,
-        },
-        true,
-      );
-      s.steps += 2;
-      lastStepAt.current = now;
-      lastMoveAt.current = now;
-    }, 1000);
-  };
-
   /** Finished or thrown away: stop the service and forget the walk on this phone. */
   const clear = async () => {
-    stopSimulation();
     ref.current = null;
     setWalk(null);
     await stopBackgroundWalk();
@@ -540,8 +484,5 @@ export function useWalkTracker() {
     pause,
     resume,
     clear,
-    /** Dev builds only (undefined in release). */
-    simulate: __DEV__ ? simulate : undefined,
-    simulated,
   };
 }
