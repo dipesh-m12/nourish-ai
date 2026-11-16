@@ -132,7 +132,7 @@ export default function DashboardScreen() {
   // Auto check-in watches today's pinned places (only if the user switched it on).
   const placesKey = (today.data?.challenges ?? [])
     .filter((c) => c.place)
-    .map((c) => `${c.id}:${c.progress.done}`)
+    .map((c) => `${c.id}:${c.progress.done}:${c.place?.lat ?? ''},${c.place?.lng ?? ''}`)
     .join();
   useEffect(() => {
     if (today.data) void syncGeofences(today.data.challenges);

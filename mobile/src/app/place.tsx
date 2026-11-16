@@ -12,15 +12,21 @@ import { PlaceMap } from '@/components/formats/place-map';
 import { Button } from '@/components/ui/button';
 import { Heading, Text } from '@/components/ui/text';
 import { colors } from '@/constants/colors';
-import { autoCheckInOn, disableAutoCheckIn, enableAutoCheckIn } from '@/lib/place-task';
+import {
+  autoCheckInOn,
+  disableAutoCheckIn,
+  enableAutoCheckIn,
+  syncGeofences,
+} from '@/lib/place-task';
 import { localDate } from '@/utils/date';
 import { formatDistance, metresBetween, type LngLat } from '@/utils/geo';
 
 const STAMP = require('@/assets/images/world/flower-bloom.webp');
 
 /**
- * "Get there" challenges (gym, park, temple): pin the spot once, then the map shows how far
- * you are, and Check in unlocks when you're there. Showing up is the whole habit.
+ * "Get there" challenges (gym, park, temple): pin the spot once (tap it on the map, or use where
+ * you stand), then the map shows how far you are, and Check in unlocks when you're there.
+ * Showing up is the whole habit.
  */
 export default function PlaceScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
@@ -34,6 +40,8 @@ export default function PlaceScreen() {
   const [allowed, setAllowed] = useState<boolean | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  /** A spot tapped on the map, waiting for "Pin here". */
+  const [draft, setDraft] = useState<LngLat | null>(null);
 
   const place: LngLat | null = challenge?.place ? [challenge.place.lng, challenge.place.lat] : null;
   const radius = challenge?.place?.radiusM ?? 150;
@@ -59,12 +67,19 @@ export default function PlaceScreen() {
     };
   }, []);
 
-  const pinHere = () => {
-    if (!challenge || !here) return;
+  /** Saves the pin (a tapped spot or where you stand). */
+  const pin = (at: LngLat | null) => {
+    if (!challenge || !at) return;
     setPlace.mutate(
-      { id: challenge.id, place: { lat: here[1], lng: here[0], radiusM: 150 } },
+      { id: challenge.id, place: { lat: at[1], lng: at[0], radiusM: 150 } },
       {
-        onSuccess: () => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success),
+        onSuccess: () => {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          setDraft(null);
+          setNote(null);
+          // Auto check-in watches the old spot until the regions are refreshed.
+          void today.refetch().then((r) => r.data && syncGeofences(r.data.challenges));
+        },
         onError: (e) => setNote(e.message),
       },
     );
@@ -119,7 +134,15 @@ export default function PlaceScreen() {
 
   return (
     <View className="flex-1 bg-bg">
-      <PlaceMap place={place} locate={allowed === true} />
+      <PlaceMap
+        place={place}
+        locate={allowed === true}
+        draft={draft}
+        onPick={(at) => {
+          Haptics.selectionAsync();
+          setDraft(at);
+        }}
+      />
 
       <SafeAreaView edges={['top']} className="absolute left-4 top-0">
         <Pressable
@@ -138,14 +161,21 @@ export default function PlaceScreen() {
           {challenge?.title ?? 'Place'}
         </Text>
         <Text className="mt-1 font-serif-bold text-3xl">
-          {!place
-            ? 'Where is it?'
-            : arrived
-              ? 'You’re here'
-              : away !== null
-                ? `${formatDistance(away)} away`
-                : 'Finding you…'}
+          {draft
+            ? 'Pin it here?'
+            : !place
+              ? 'Where is it?'
+              : arrived
+                ? 'You’re here'
+                : away !== null
+                  ? `${formatDistance(away)} away`
+                  : 'Finding you…'}
         </Text>
+        {!draft && (
+          <Text className="mt-1 text-sm text-muted">
+            {place ? 'Tap the map to move the pin.' : 'Tap the map on the spot.'}
+          </Text>
+        )}
         {(note || allowed === false) && (
           <Text className="mt-2 text-sm text-danger">
             {note ?? 'Location is off. Allow it to check in.'}
@@ -153,10 +183,15 @@ export default function PlaceScreen() {
         )}
 
         <View className="mt-4 gap-2">
-          {!place ? (
+          {draft ? (
+            <>
+              <Button label="Pin here" onPress={() => pin(draft)} loading={setPlace.isPending} />
+              <Button variant="ghost" label="Cancel" onPress={() => setDraft(null)} />
+            </>
+          ) : !place ? (
             <Button
               label="Pin where I am now"
-              onPress={pinHere}
+              onPress={() => pin(here)}
               disabled={!here}
               loading={setPlace.isPending}
             />
@@ -182,8 +217,8 @@ export default function PlaceScreen() {
               )}
               <Button
                 variant="ghost"
-                label="Move the pin here"
-                onPress={pinHere}
+                label="Move the pin to where I am"
+                onPress={() => pin(here)}
                 disabled={!here || setPlace.isPending}
               />
             </>

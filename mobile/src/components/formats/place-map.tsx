@@ -3,6 +3,7 @@ import { MapPin } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import { useLivePosition } from '@/hooks/use-live-position';
+import { colors } from '@/constants/colors';
 import type { LngLat } from '@/utils/geo';
 
 /** Same free, key-less OpenFreeMap style as the walk map. */
@@ -14,10 +15,17 @@ interface Props {
   place: LngLat | null;
   /** Where the phone is (the map opens on it when there's no place yet). */
   locate: boolean;
+  /** A spot tapped on the map, not saved yet (drawn as an outlined pin). */
+  draft?: LngLat | null;
+  /** Tapping the map picks that spot (to pin it, or to move the pin). */
+  onPick?: (at: LngLat) => void;
 }
 
-/** The place and the blue dot on one map: you can see how far you are from where you're going. */
-export function PlaceMap({ place, locate }: Props) {
+/**
+ * The place and the blue dot on one map: you can see how far you are from where you're going.
+ * Tap anywhere to pick a spot (the gym across town, not only where you stand).
+ */
+export function PlaceMap({ place, locate, draft, onPick }: Props) {
   const camera = useRef<CameraRef>(null);
   // Camera moves before the map has loaded are dropped, so nothing moves until it has.
   const [ready, setReady] = useState(false);
@@ -46,12 +54,20 @@ export function PlaceMap({ place, locate }: Props) {
         compass={false}
         touchPitch={false}
         onDidFinishLoadingMap={() => setReady(true)}
+        onPress={(e) => onPick?.(e.nativeEvent.lngLat)}
       >
         <Camera
           ref={camera}
           initialViewState={{ center: place ?? [78.9629, 20.5937], zoom: place ? 15 : 3.5 }}
         />
         {locate && <UserLocation animated accuracy />}
+        {draft && (
+          <Marker id="draft" lngLat={draft} anchor="bottom">
+            <View className="h-11 w-11 items-center justify-center rounded-full border-2 border-accent bg-card">
+              <MapPin size={22} color={colors.accent} />
+            </View>
+          </Marker>
+        )}
         {place && (
           <Marker id="place" lngLat={place} anchor="bottom">
             <View className="items-center">
