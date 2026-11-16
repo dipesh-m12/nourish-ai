@@ -14,6 +14,8 @@ export const sessionDataSchema = z
     awayMs: z.number().min(0).max(86_400_000),
     // [lng, lat]; the app downsamples long routes before sending.
     path: z.array(z.tuple([z.number().min(-180).max(180), z.number().min(-90).max(90)])).max(2000),
+    // Where a new piece of the path starts (after a gap): the app draws nothing across it.
+    breaks: z.array(z.number().int().min(1).max(2000)).max(500),
     title: z.string().trim().max(80),
     activity: z.enum(activityKindEnum.enumValues).exclude(['sleep']),
     // Same shape the activity log accepts (provider ids: letters, digits, _ and -).

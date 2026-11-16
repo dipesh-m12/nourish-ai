@@ -14,10 +14,11 @@ import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Text } from '@/components/ui/text';
 import { colors } from '@/constants/colors';
-import { downsample, useWalkTracker } from '@/hooks/use-walk-tracker';
+import { useWalkTracker } from '@/hooks/use-walk-tracker';
 import { isNetworkError, queueWalk, sendWalk, type PendingWalk } from '@/lib/walk-outbox';
 import { useToast } from '@/store/toast';
 import { localDate } from '@/utils/date';
+import { downsampleRoute } from '@/utils/route';
 import { formatClock, formatDistance } from '@/utils/geo';
 
 /**
@@ -68,7 +69,7 @@ export default function WalkScreen() {
     // Snapshot first: pausing to save must not count as one more pause on the card.
     const done = {
       title,
-      path: downsample(w.path),
+      ...downsampleRoute(w.path, w.breaks),
       metres: Math.round(walk.metres),
       movingMs: Math.round(walk.elapsedMs),
       steps: walk.steps,
@@ -142,7 +143,7 @@ export default function WalkScreen() {
   return (
     <View className="flex-1 bg-bg">
       {walk.status === 'running' && <KeepAwake />}
-      <WalkMap path={walk.path} locate={walk.allowed === true} />
+      <WalkMap path={walk.path} breaks={walk.breaks} locate={walk.allowed === true} />
 
       <SafeAreaView edges={['top']} className="absolute left-4 top-0">
         <Pressable

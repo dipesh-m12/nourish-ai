@@ -10,6 +10,8 @@ export interface SessionData {
   steps?: number | null;
   pauses?: number;
   path?: [number, number][];
+  /** Where a new piece of the path starts (after a gap); nothing is drawn across. */
+  breaks?: number[];
   awayMs?: number;
   calories?: number | null;
   title?: string;

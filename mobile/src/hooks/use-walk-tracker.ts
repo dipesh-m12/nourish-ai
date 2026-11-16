@@ -9,6 +9,7 @@ import { ApiError } from '@/lib/api-client';
 import { stepsBetween } from '@/lib/health';
 import { drainFixes, startBackgroundWalk, stopBackgroundWalk, type RawFix } from '@/lib/walk-task';
 import { metresBetween, type LngLat } from '@/utils/geo';
+import { downsampleRoute } from '@/utils/route';
 import { extendTrail, gpsMoving, type TrailFilter } from '@/utils/trail';
 
 /**
@@ -20,6 +21,17 @@ const STILL_AFTER_MS = 20_000;
 /** The GPS's own (Doppler) speed above this = walking, if the fix is decent. */
 const MOVING_SPEED_MS = 0.6;
 const SPEED_ACCURACY_M = 30;
+/**
+ * Distance is measured between route points at least this far apart. The drawn route keeps
+ * every few metres (turns show), but summing those adds the GPS zig-zag (+15-25 %).
+ */
+const DISTANCE_STEP_M = 10;
+/**
+ * No GPS for longer than this (app closed, screen off without the background service, signal
+ * lost): the route starts a new piece instead of a straight line through places not walked.
+ * Shorter gaps (batched or patchy fixes) still join: a straight bit there is the best guess.
+ */
+const PIECE_GAP_MS = 60_000;
 /**
  * The drawn route stops while the step counter says you're standing (no step this long). Shorter
  * than FEET_STILL_MS: a pause in drawing costs a short straight bit; drawing drift costs a scribble.
@@ -57,6 +69,12 @@ export interface WalkState {
   awayMs: number;
   /** The route as walked, for the map and the trophy (utils/trail.ts), not for distance. */
   path: LngLat[];
+  /** Where a new piece of the route starts (indexes into path): nothing is drawn across. */
+  breaks?: number[];
+  /** The next point starts a new piece (set by a gap or a resume). */
+  newPiece?: boolean;
+  /** Last route point distance was measured to (see DISTANCE_STEP_M). */
+  distanceMark?: LngLat | null;
   /** The route smoother's state (missing in walks saved by older builds). */
   trail?: TrailFilter | null;
   /** Last moment the app's clock ran. */
@@ -78,13 +96,6 @@ export async function readStoredWalk(): Promise<WalkState | null> {
 const saveWalk = (s: WalkState) =>
   AsyncStorage.setItem(STORE_KEY, JSON.stringify(s)).catch(() => undefined);
 const clearWalk = () => AsyncStorage.removeItem(STORE_KEY).catch(() => undefined);
-
-/** At most `max` points, evenly picked, always keeping the first and last. */
-export function downsample(path: LngLat[], max = 1000): LngLat[] {
-  if (path.length <= max) return path;
-  const step = (path.length - 1) / (max - 1);
-  return Array.from({ length: max }, (_, i) => path[Math.round(i * step)]!);
-}
 
 /**
  * Tracks a walk: route, distance, moving time, steps, stops. The walk is stored on the phone
@@ -128,7 +139,7 @@ export function useWalkTracker() {
     const s = ref.current;
     // A new path array each time: the map (memoised by the React Compiler) only redraws the
     // line when the array itself changes, and the callbacks push into the live copy.
-    setWalk(s ? { ...s, path: [...s.path] } : null);
+    setWalk(s ? { ...s, path: [...s.path], breaks: [...(s.breaks ?? [])] } : null);
     if (s) void saveWalk(s);
   }, []);
 
@@ -197,11 +208,26 @@ export function useWalkTracker() {
       live &&
       ((hasPedometer.current && now - lastStepAt.current > TRAIL_STILL_MS) ||
         now - lastMoveAt.current > STILL_AFTER_MS);
-    const tail = s.path.at(-1);
+    // A long gap since the last usable fix: the next point starts a new piece.
+    if (s.trail && fix.t - s.trail.t > PIECE_GAP_MS) s.newPiece = true;
+    const piece = Boolean(s.newPiece) && s.path.length > 0;
+    if (piece) s.trail = null; // fresh smoothing from where you are now
     const before = s.path.length;
-    s.trail = extendTrail(s.path, s.trail ?? null, fix, standing);
-    const grew = tail !== undefined && s.path.length > before;
-    if (grew) s.metres += metresBetween(tail, s.path.at(-1)!);
+    s.trail = extendTrail(s.path, s.trail ?? null, fix, standing && !piece, piece);
+    if (piece && s.path.length > before) {
+      (s.breaks ??= []).push(before);
+      s.newPiece = false;
+      s.distanceMark = s.path.at(-1)!; // the gap itself is credited from steps, not GPS
+    } else if (s.path.length > before) {
+      const head = s.path.at(-1)!;
+      const mark = s.distanceMark ?? s.path[0]!;
+      const step = metresBetween(mark, head);
+      if (!s.distanceMark) s.distanceMark = mark;
+      if (step >= DISTANCE_STEP_M) {
+        s.metres += step;
+        s.distanceMark = head;
+      }
+    }
 
     // Any sign of moving keeps the clock running: the GPS's own speed, or the average position
     // moving over 10 s (steps count too, in the pedometer callback). Not "the route grew": its
@@ -229,6 +255,8 @@ export function useWalkTracker() {
       const before = s.movingMs;
       const fixes = s.background ? await drainFixes() : [];
       for (const f of fixes) takeFix(f, false);
+      // Nothing recorded the gap: whatever comes next is a new piece of the route.
+      if (!fixes.length) s.newPiece = true;
       if (s.movingMs === before) {
         // No route data for the gap: Health Connect steps, else the time itself (capped).
         const steps = await stepsBetween(new Date(from), new Date(now));
@@ -334,7 +362,7 @@ export function useWalkTracker() {
             steps: cur.steps,
             pauses: cur.pauses,
             awayMs: Math.round(cur.awayMs),
-            path: downsample(cur.path),
+            ...downsampleRoute(cur.path, cur.breaks),
           })
           .catch((err: unknown) => {
             // The server no longer has this walk running (ended, replaced): open a fresh one;
@@ -420,7 +448,7 @@ export function useWalkTracker() {
     if (!s) return;
     s.status = 'running';
     s.lastTickAt = Date.now(); // a pause never counts as time away
-    s.trail = null; // the route picks up from where you are now
+    s.newPiece = true; // the route picks up from where you are now, as a new piece
     lastMoveAt.current = Date.now();
     lastStepAt.current = Date.now();
     wasMoving.current = true;
@@ -498,6 +526,7 @@ export function useWalkTracker() {
     status: (walk?.status ?? 'idle') as WalkStatus,
     restored,
     path: walk?.path ?? [],
+    breaks: walk?.breaks ?? [],
     metres,
     elapsedMs: walk?.movingMs ?? 0,
     moving,

@@ -14,8 +14,11 @@ import { metresBetween, type LngLat } from './geo';
 export const TRAIL_MAX_ACCURACY_M = 35;
 /** A new point every few metres: smooth enough for a loop, light enough to store. */
 export const TRAIL_STEP_M = 3;
-/** How fast the true position may change between fixes (walking, with turns), m/s. */
-const PROCESS_MS = 3;
+/**
+ * How fast the true position may change between fixes, m/s. Higher = follows turns more
+ * tightly (less corner cutting), lower = smoother. 4.5 keeps a right turn within ~1-2 m.
+ */
+const PROCESS_MS = 4.5;
 /** A fix this far from the smoothed position this fast is a glitch, not a walk. */
 const MAX_JUMP_MS = 10;
 /**
@@ -26,6 +29,12 @@ const MAX_JUMP_MS = 10;
  */
 const MOVE_WINDOW_MS = 5000;
 const MOVE_MIN_M = 4.5;
+/**
+ * Once moving, keep drawing this long after the last detection. In a turn the average position
+ * moves less, the check can drop out for a few seconds, and the line jumped straight across the
+ * corner (the "hypotenuse").
+ */
+const MOVING_HOLD_MS = 8000;
 /**
  * The walk clock's own check is steadier (it decides auto-pause, so a false "standing" while
  * walking is the worst error): 10 s windows, 7 m. Walking moves ~13 m; drift rarely 7.
@@ -41,6 +50,8 @@ export interface TrailFilter {
   t: number;
   /** Raw fixes of the last 20 s [lng, lat, t], for the moving checks. */
   recent?: [number, number, number][];
+  /** Drawing stays on until this time (ms) after movement was last detected. */
+  movingUntil?: number;
 }
 
 export interface TrailFix {
@@ -65,6 +76,7 @@ export function smooth(filter: TrailFilter | null, fix: TrailFix): TrailFilter {
     variance: (1 - k) * variance,
     t: fix.t,
     recent: filter.recent,
+    movingUntil: filter.movingUntil,
   };
 }
 
@@ -78,6 +90,8 @@ export function extendTrail(
   fix: TrailFix,
   /** true = the step counter is live and no steps came in lately: standing, draw nothing. */
   still = false,
+  /** true = this fix starts a new piece of the route (after a gap): keep it as its first point. */
+  startPiece = false,
 ): TrailFilter | null {
   if ((fix.acc ?? Infinity) > TRAIL_MAX_ACCURACY_M) return filter;
   if (filter) {
@@ -92,16 +106,14 @@ export function extendTrail(
   recent.push([fix.lng, fix.lat, fix.t]);
   next.recent = recent;
   const last = trail.at(-1);
-  if (!last) {
+  if (!last || startPiece) {
     trail.push(point);
     return next;
   }
-  if (
-    !still &&
-    movedLately(recent, fix.t, MOVE_WINDOW_MS, MOVE_MIN_M) &&
-    metresBetween(last, point) >= TRAIL_STEP_M
-  )
-    trail.push(point);
+  if (movedLately(recent, fix.t, MOVE_WINDOW_MS, MOVE_MIN_M))
+    next.movingUntil = fix.t + MOVING_HOLD_MS;
+  const moving = (next.movingUntil ?? 0) >= fix.t;
+  if (!still && moving && metresBetween(last, point) >= TRAIL_STEP_M) trail.push(point);
   return next;
 }
 

@@ -12,6 +12,7 @@ import { Pressable, View } from 'react-native';
 import { colors } from '@/constants/colors';
 import { useLivePosition } from '@/hooks/use-live-position';
 import type { LngLat } from '@/utils/geo';
+import { segmentsOf } from '@/utils/route';
 
 /** OpenFreeMap: free vector tiles, no API key (Google Maps needs billing). Light, calm style. */
 const STYLE = 'https://tiles.openfreemap.org/styles/positron';
@@ -23,6 +24,8 @@ const REFOLLOW_MS = 8000;
 
 interface Props {
   path: LngLat[];
+  /** Where a new piece starts (after a gap): no line is drawn across. */
+  breaks?: number[];
   /** Location permission granted: show the blue dot and follow it. */
   locate: boolean;
 }
@@ -32,7 +35,7 @@ interface Props {
  * bold sage line with a white edge (readable on any street), starting at a sage dot.
  * Panning the map pauses the follow; the locate button (or a few seconds) brings it back.
  */
-export function WalkMap({ path, locate }: Props) {
+export function WalkMap({ path, breaks, locate }: Props) {
   const camera = useRef<CameraRef>(null);
   const position = useLivePosition(locate);
   const [following, setFollowing] = useState(true);
@@ -57,9 +60,9 @@ export function WalkMap({ path, locate }: Props) {
     return () => clearTimeout(timer);
   }, [following]);
 
-  // Only the smoothed route (utils/trail.ts): tacking the raw live fix on the end made the
-  // tip jump about, and with a short route it drew one straight line from the start.
-  const line = path;
+  // Only the smoothed route (utils/trail.ts), piece by piece: no straight line across a gap
+  // (app closed, GPS lost), and no raw live fix tacked on the end.
+  const pieces = segmentsOf(path, breaks).filter((p) => p.length > 1);
 
   return (
     <View className="flex-1">
@@ -79,13 +82,13 @@ export function WalkMap({ path, locate }: Props) {
       >
         <Camera ref={camera} initialViewState={{ center: [78.9629, 20.5937], zoom: 3.5 }} />
         {locate && <UserLocation animated accuracy />}
-        {line.length > 1 && (
+        {pieces.length > 0 && (
           <GeoJSONSource
             id="walk-path"
             data={{
               type: 'Feature',
               properties: {},
-              geometry: { type: 'LineString', coordinates: line },
+              geometry: { type: 'MultiLineString', coordinates: pieces },
             }}
           >
             <Layer

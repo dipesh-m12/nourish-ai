@@ -598,6 +598,8 @@ export interface SessionData {
   steps?: number | null;
   pauses?: number;
   path?: [number, number][];
+  /** Indexes in `path` where a new piece starts (after a gap). */
+  breaks?: number[];
   /** Time counted while the app was closed (shown on the card, so it's honest). */
   awayMs?: number;
   /** Set on finish from the server's burn maths. */

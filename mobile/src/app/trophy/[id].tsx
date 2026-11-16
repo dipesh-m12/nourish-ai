@@ -39,6 +39,7 @@ export default function TrophyScreen() {
         result={{
           title: data.title ?? 'Walk',
           path: data.path ?? [],
+          breaks: data.breaks ?? [],
           metres: data.metres ?? 0,
           movingMs: data.movingMs ?? 0,
           steps: data.steps ?? null,

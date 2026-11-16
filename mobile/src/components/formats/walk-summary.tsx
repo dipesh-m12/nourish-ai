@@ -9,10 +9,13 @@ import { colors } from '@/constants/colors';
 import { shareView } from '@/lib/share-image';
 import { useToast } from '@/store/toast';
 import { formatClock, formatDistance, type LngLat } from '@/utils/geo';
+import { segmentsOf } from '@/utils/route';
 
 export interface WalkResult {
   title: string;
   path: LngLat[];
+  /** Where a new piece of the route starts (after a gap): drawn as separate lines. */
+  breaks?: number[];
   metres: number;
   movingMs: number;
   steps: number | null;
@@ -65,6 +68,13 @@ export function WalkSummary({
   const toast = useToast((s) => s.show);
   const [sharing, setSharing] = useState(false);
   const pts = routePoints(result.path);
+  // One line per piece of the route, all on the same scale (no line across a gap).
+  const lines = pts
+    ? segmentsOf(
+        pts.map((p) => [p[0], p[1]] as LngLat),
+        result.breaks,
+      ).filter((l) => l.length > 1)
+    : [];
   const moved = result.metres > 0;
 
   const share = async () => {
@@ -107,14 +117,17 @@ export function WalkSummary({
           >
             {pts ? (
               <Svg width={BOX.w} height={BOX.h}>
-                <Polyline
-                  points={pts.map((p) => p.join(',')).join(' ')}
-                  stroke={colors.accent}
-                  strokeWidth={4}
-                  strokeLinejoin="round"
-                  strokeLinecap="round"
-                  fill="none"
-                />
+                {lines.map((l, i) => (
+                  <Polyline
+                    key={i}
+                    points={l.map((p) => p.join(',')).join(' ')}
+                    stroke={colors.accent}
+                    strokeWidth={4}
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
+                    fill="none"
+                  />
+                ))}
                 <Circle cx={pts[0]![0]} cy={pts[0]![1]} r={5} fill={colors.primary} />
                 <Circle cx={pts.at(-1)![0]} cy={pts.at(-1)![1]} r={5} fill={colors.accent} />
               </Svg>
