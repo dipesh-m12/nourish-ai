@@ -2,9 +2,9 @@ import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { Check, ChevronLeft, Search } from 'lucide-react-native';
+import { Check, ChevronLeft, Search, X } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
-import { Keyboard, Platform, Pressable, Switch, TextInput, View } from 'react-native';
+import { Keyboard, Platform, Pressable, ScrollView, Switch, TextInput, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSetPlace } from '@/api/challenges';
@@ -25,6 +25,14 @@ import { localDate } from '@/utils/date';
 import { formatDistance, metresBetween, type LngLat } from '@/utils/geo';
 
 const STAMP = require('@/assets/images/world/flower-bloom.webp');
+/** Floating controls over the map need a soft lift to read against the tiles. */
+const LIFT = {
+  elevation: 4,
+  shadowColor: '#000',
+  shadowOpacity: 0.12,
+  shadowRadius: 8,
+  shadowOffset: { width: 0, height: 2 },
+};
 
 /**
  * "Get there" challenges (gym, park, temple): pin the spot once (tap it on the map, or use where
@@ -63,6 +71,23 @@ export default function PlaceScreen() {
     retry: false,
   });
   const doneToday = challenge?.progress.done === true;
+  /** While typing, the keyboard owns the bottom: the card steps aside, the search stays on top. */
+  const [typing, setTyping] = useState(false);
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', () => setTyping(true));
+    const hide = Keyboard.addListener('keyboardDidHide', () => setTyping(false));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+  const pick = (at: LngLat, fly: boolean) => {
+    Haptics.selectionAsync();
+    Keyboard.dismiss();
+    setQuery('');
+    setDraft(at);
+    setFocus(fly ? at : null);
+  };
 
   // Follow the phone while this screen is open (foreground only).
   useEffect(() => {
@@ -156,50 +181,26 @@ export default function PlaceScreen() {
         locate={allowed === true}
         draft={draft}
         focus={focus}
-        onPick={(at) => {
-          Haptics.selectionAsync();
-          setDraft(at);
-        }}
+        onPick={(at) => pick(at, false)}
       />
 
-      <SafeAreaView edges={['top']} className="absolute left-4 top-0">
-        <Pressable
-          onPress={() => router.back()}
-          hitSlop={12}
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-          className="mt-2 h-10 w-10 items-center justify-center rounded-full bg-card"
-        >
-          <ChevronLeft size={22} color={colors.ink} />
-        </Pressable>
-      </SafeAreaView>
-
-      <SafeAreaView edges={['bottom']} className="rounded-t-3xl bg-card px-6 pb-4 pt-5">
-        <Text className="text-sm text-muted" numberOfLines={1}>
-          {challenge?.title ?? 'Place'}
-        </Text>
-        <Text className="mt-1 font-serif-bold text-3xl">
-          {draft
-            ? 'Pin it here?'
-            : !place
-              ? 'Where is it?'
-              : arrived
-                ? 'You’re here'
-                : away !== null
-                  ? `${formatDistance(away)} away`
-                  : 'Finding you…'}
-        </Text>
-        {!draft && (
-          <Text className="mt-1 text-sm text-muted">
-            {place
-              ? 'Search or tap the map to move the pin.'
-              : 'Search, or tap the map on the spot.'}
-          </Text>
-        )}
-
-        {/* Find it by name instead of standing there (OpenStreetMap places near you). */}
-        {!draft && (
-          <View className="mt-3 h-12 flex-row items-center gap-2 rounded-2xl bg-bg px-4">
+      {/* Search on top, like a maps app: the keyboard never covers it. */}
+      <SafeAreaView edges={['top']} className="absolute left-0 right-0 top-0 px-4">
+        <View className="mt-2 flex-row items-center gap-2">
+          <Pressable
+            onPress={() => router.back()}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+            className="h-12 w-12 items-center justify-center rounded-full bg-card"
+            style={LIFT}
+          >
+            <ChevronLeft size={22} color={colors.ink} />
+          </Pressable>
+          <View
+            className="h-12 flex-1 flex-row items-center gap-2 rounded-full bg-card pl-4 pr-2"
+            style={LIFT}
+          >
             <Search size={18} color={colors.muted} />
             <TextInput
               value={query}
@@ -211,108 +212,146 @@ export default function PlaceScreen() {
               className="flex-1 font-sans text-base text-ink"
               style={{ includeFontPadding: false }}
             />
-          </View>
-        )}
-        {!draft && typed.length >= 3 && (
-          <View className="mt-2 overflow-hidden rounded-2xl bg-bg">
-            {search.isPending && <Text className="px-4 py-3 text-sm text-muted">Searching…</Text>}
-            {search.isError && (
-              <Text className="px-4 py-3 text-sm text-danger">{search.error.message}</Text>
-            )}
-            {search.isSuccess && search.data.length === 0 && (
-              <Text className="px-4 py-3 text-sm text-muted">
-                Nothing found nearby. Tap the map instead.
-              </Text>
-            )}
-            {search.data?.map((hit, i) => (
+            {query ? (
               <Pressable
-                key={hit.id}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  Keyboard.dismiss();
-                  setQuery('');
-                  setDraft(hit.at);
-                  setFocus(hit.at);
-                }}
+                onPress={() => setQuery('')}
+                hitSlop={8}
                 accessibilityRole="button"
-                accessibilityLabel={`${hit.name}, ${hit.detail}`}
-                className={`min-h-12 justify-center px-4 py-2 ${i > 0 ? 'border-t border-line' : ''}`}
+                accessibilityLabel="Clear search"
+                className="h-9 w-9 items-center justify-center rounded-full"
               >
-                <Text className="font-sans-semibold" numberOfLines={1}>
-                  {hit.name}
-                </Text>
-                {hit.detail ? (
-                  <Text className="text-xs text-muted" numberOfLines={1}>
-                    {hit.detail}
-                  </Text>
-                ) : null}
+                <X size={18} color={colors.muted} />
               </Pressable>
-            ))}
+            ) : null}
+          </View>
+        </View>
+
+        {typed.length >= 3 && query.trim().length >= 3 && (
+          <View className="mt-2 overflow-hidden rounded-3xl bg-card" style={LIFT}>
+            <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 320 }}>
+              {search.isPending && <Text className="px-5 py-4 text-sm text-muted">Searching…</Text>}
+              {search.isError && (
+                <Text className="px-5 py-4 text-sm text-danger">{search.error.message}</Text>
+              )}
+              {search.isSuccess && search.data.length === 0 && (
+                <Text className="px-5 py-4 text-sm text-muted">
+                  Nothing found nearby. Tap the map instead.
+                </Text>
+              )}
+              {search.data?.map((hit, i) => (
+                <Pressable
+                  key={hit.id}
+                  onPress={() => pick(hit.at, true)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${hit.name}, ${hit.detail}`}
+                  className={`min-h-14 flex-row items-center gap-3 px-5 py-3 active:bg-bg ${i > 0 ? 'border-t border-line' : ''}`}
+                >
+                  <Search size={16} color={colors.muted} />
+                  <View className="flex-1">
+                    <Text className="font-sans-semibold" numberOfLines={1}>
+                      {hit.name}
+                    </Text>
+                    {hit.detail ? (
+                      <Text className="text-xs text-muted" numberOfLines={1}>
+                        {hit.detail}
+                      </Text>
+                    ) : null}
+                  </View>
+                </Pressable>
+              ))}
+            </ScrollView>
           </View>
         )}
-        {(note || allowed === false) && (
-          <Text className="mt-2 text-sm text-danger">
-            {note ?? 'Location is off. Allow it to check in.'}
-          </Text>
-        )}
-
-        <View className="mt-4 gap-2">
-          {draft ? (
-            <>
-              <Button label="Pin here" onPress={() => pin(draft)} loading={setPlace.isPending} />
-              <Button
-                variant="ghost"
-                label="Cancel"
-                onPress={() => {
-                  setDraft(null);
-                  setFocus(null);
-                }}
-              />
-            </>
-          ) : !place ? (
-            <Button
-              label="Pin where I am now"
-              onPress={() => pin(here)}
-              disabled={!here}
-              loading={setPlace.isPending}
-            />
-          ) : (
-            <>
-              {doneToday ? (
-                <View className="h-12 flex-row items-center justify-center gap-2 rounded-full bg-primary-soft">
-                  <Check size={18} color={colors.primary} />
-                  <Text className="font-sans-semibold text-primary">Checked in today</Text>
-                </View>
-              ) : (
-                <Button
-                  label="Check in"
-                  onPress={checkIn}
-                  disabled={!arrived}
-                  loading={log.isPending}
-                />
-              )}
-              {Platform.OS !== 'web' && (
-                <View className="mt-1 flex-row items-center gap-3 rounded-2xl bg-bg px-4 py-2">
-                  <Text className="flex-1 font-sans-semibold">Check in automatically</Text>
-                  <Switch
-                    value={auto}
-                    onValueChange={(v) => void toggleAuto(v)}
-                    trackColor={{ true: colors.primary, false: colors.line }}
-                    thumbColor="#fff"
-                    accessibilityLabel="Check in automatically when you arrive, even with the app closed"
-                  />
-                </View>
-              )}
-              <Button
-                variant="ghost"
-                label="Move the pin to where I am"
-                onPress={() => pin(here)}
-                disabled={!here || setPlace.isPending}
-              />
-            </>
-          )}
-        </View>
       </SafeAreaView>
+
+      {!typing && (
+        <SafeAreaView edges={['bottom']} className="rounded-t-3xl bg-card px-6 pb-4 pt-5">
+          <Text className="text-sm text-muted" numberOfLines={1}>
+            {challenge?.title ?? 'Place'}
+          </Text>
+          <Text className="mt-1 font-serif-bold text-3xl">
+            {draft
+              ? 'Pin it here?'
+              : !place
+                ? 'Where is it?'
+                : arrived
+                  ? 'You’re here'
+                  : away !== null
+                    ? `${formatDistance(away)} away`
+                    : 'Finding you…'}
+          </Text>
+          {!draft && (
+            <Text className="mt-1 text-sm text-muted">
+              {place
+                ? 'Search above, or tap the map to move the pin.'
+                : 'Search above, or tap the map on the spot.'}
+            </Text>
+          )}
+
+          {(note || allowed === false) && (
+            <Text className="mt-2 text-sm text-danger">
+              {note ?? 'Location is off. Allow it to check in.'}
+            </Text>
+          )}
+
+          <View className="mt-4 gap-2">
+            {draft ? (
+              <>
+                <Button label="Pin here" onPress={() => pin(draft)} loading={setPlace.isPending} />
+                <Button
+                  variant="ghost"
+                  label="Cancel"
+                  onPress={() => {
+                    setDraft(null);
+                    setFocus(null);
+                  }}
+                />
+              </>
+            ) : !place ? (
+              <Button
+                label="Pin where I am now"
+                onPress={() => pin(here)}
+                disabled={!here}
+                loading={setPlace.isPending}
+              />
+            ) : (
+              <>
+                {doneToday ? (
+                  <View className="h-12 flex-row items-center justify-center gap-2 rounded-full bg-primary-soft">
+                    <Check size={18} color={colors.primary} />
+                    <Text className="font-sans-semibold text-primary">Checked in today</Text>
+                  </View>
+                ) : (
+                  <Button
+                    label="Check in"
+                    onPress={checkIn}
+                    disabled={!arrived}
+                    loading={log.isPending}
+                  />
+                )}
+                {Platform.OS !== 'web' && (
+                  <View className="mt-1 flex-row items-center gap-3 rounded-2xl bg-bg px-4 py-2">
+                    <Text className="flex-1 font-sans-semibold">Check in automatically</Text>
+                    <Switch
+                      value={auto}
+                      onValueChange={(v) => void toggleAuto(v)}
+                      trackColor={{ true: colors.primary, false: colors.line }}
+                      thumbColor="#fff"
+                      accessibilityLabel="Check in automatically when you arrive, even with the app closed"
+                    />
+                  </View>
+                )}
+                <Button
+                  variant="ghost"
+                  label="Move the pin to where I am"
+                  onPress={() => pin(here)}
+                  disabled={!here || setPlace.isPending}
+                />
+              </>
+            )}
+          </View>
+        </SafeAreaView>
+      )}
     </View>
   );
 }
