@@ -5,3 +5,5 @@ export async function pushToken(_ask = false): Promise<string | null> {
 }
 
 export function useNotificationRouting(_enabled: boolean) {}
+
+export async function ensureChannel() {}

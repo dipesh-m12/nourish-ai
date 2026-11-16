@@ -34,10 +34,35 @@ export const CHIME = 'nourish_chime.wav';
 // 'nourish-chime' was made by builds whose shrinker dropped the sound: stuck on the default.
 const OLD_CHANNELS = ['nudges', 'nourish-alerts', 'nourish-reminders', 'nourish-chime'];
 
+let channelReady: Promise<void> | null = null;
+
 /**
- * The device's Expo push token, asking for permission once. null = no permission, emulator, or
- * no network: the app works the same, the user just isn't nudged.
+ * Makes sure the chime channel exists. Anything posted to a channel that doesn't exist yet goes
+ * to Android's fallback channel with the DEFAULT sound: a push right after install, a timer or
+ * check-in alert before the app had registered for push. So it runs at app start and before
+ * every local notification (once per process; Android keeps an existing channel as it is).
  */
+export function ensureChannel(): Promise<void> {
+  channelReady ??= (async () => {
+    try {
+      await Notifications.setNotificationChannelAsync(CHANNEL, {
+        name: 'Reminders and nudges',
+        importance: AndroidImportance.HIGH,
+        sound: CHIME,
+        enableVibrate: true,
+        vibrationPattern: [0, 250, 150, 250],
+        lightColor: colors.primary,
+      });
+      for (const old of OLD_CHANNELS)
+        await Notifications.deleteNotificationChannelAsync(old).catch(() => undefined);
+    } catch (err) {
+      channelReady = null; // try again next time
+      console.warn('[push] channel:', err instanceof Error ? err.message : err);
+    }
+  })();
+  return channelReady;
+}
+
 /**
  * The Expo push token, or null. `ask` shows the system permission prompt; without it, a token is
  * returned only if permission was already given (so app start never ambushes the user).
@@ -45,16 +70,7 @@ const OLD_CHANNELS = ['nudges', 'nourish-alerts', 'nourish-reminders', 'nourish-
 export async function pushToken(ask = false): Promise<string | null> {
   if (!Device.isDevice) return null;
   try {
-    await Notifications.setNotificationChannelAsync(CHANNEL, {
-      name: 'Reminders and nudges',
-      importance: AndroidImportance.HIGH,
-      sound: CHIME,
-      enableVibrate: true,
-      vibrationPattern: [0, 250, 150, 250],
-      lightColor: colors.primary,
-    });
-    for (const old of OLD_CHANNELS)
-      await Notifications.deleteNotificationChannelAsync(old).catch(() => undefined);
+    await ensureChannel();
 
     let { status } = await Notifications.getPermissionsAsync();
     if (status === 'undetermined' && ask)

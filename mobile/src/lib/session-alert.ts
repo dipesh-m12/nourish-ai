@@ -1,6 +1,6 @@
 import * as Notifications from 'expo-notifications';
 import type { TodayChallenge } from '@/types/today';
-import { CHANNEL, CHIME } from './push';
+import { CHANNEL, CHIME, ensureChannel } from './push';
 
 /**
  * A local notification for when a timer ends, so a session finished with the app closed still
@@ -12,6 +12,7 @@ const ID = 'session-done';
 export async function scheduleDoneAlert(challenge: TodayChallenge, minutes: number) {
   try {
     await Notifications.cancelScheduledNotificationAsync(ID).catch(() => undefined);
+    await ensureChannel(); // else it plays the default sound
     await Notifications.scheduleNotificationAsync({
       identifier: ID,
       content: {

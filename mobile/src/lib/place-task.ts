@@ -5,7 +5,7 @@ import * as TaskManager from 'expo-task-manager';
 import type { TodayChallenge } from '@/types/today';
 import { localDate } from '@/utils/date';
 import { API_BASE_URL } from './api-config';
-import { CHANNEL, CHIME } from './push';
+import { CHANNEL, CHIME, ensureChannel } from './push';
 import { tokenStorage } from './token-storage';
 
 /**
@@ -41,6 +41,8 @@ TaskManager.defineTask<{ eventType: Location.GeofencingEventType; region: Region
       if (!res.ok) return;
       await AsyncStorage.setItem(doneKey(id, date), '1');
       const name = (data.region as Region & { title?: string }).title;
+      // This can run with the app closed, in a fresh process: the channel must exist first.
+      await ensureChannel();
       await Notifications.scheduleNotificationAsync({
         content: {
           title: 'You showed up',
