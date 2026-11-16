@@ -12,3 +12,7 @@ export const setAppVersionSchema = z.object({
   updateUrl: z.url().nullable().default(null),
 });
 export type SetAppVersionInput = z.infer<typeof setAppVersionSchema>;
+
+/** PUT /admin/demo-briefing: cycle the PA's cards on one profile's dashboard (for recording). */
+export const demoBriefingSchema = z.object({ profileId: z.uuid(), on: z.boolean() });
+export type DemoBriefingInput = z.infer<typeof demoBriefingSchema>;

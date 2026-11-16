@@ -7,6 +7,7 @@ import { db } from '../../db';
 import { profiles } from '../../db/schema';
 import { eq } from 'drizzle-orm';
 import { addDays } from '../../utils/dates';
+import { briefingDemo } from './briefing.demo-store';
 import { buildBriefing, type BriefingInput } from './briefing.rules';
 
 /**
@@ -74,7 +75,12 @@ async function personalWhy(
 export const briefingService = {
   /** The card for the dashboard: rules + the AI's personal "why" line. */
   async forDay(profileId: string, date: string, tz: number) {
-    const { rules, input, focuses } = await this.rulesFor(profileId, date, tz);
+    const real = await this.rulesFor(profileId, date, tz);
+    // Demo mode (admin, for recording): the next card the PA can show, from this account.
+    const demo = await briefingDemo.next(profileId, real.input);
+    const { rules, input, focuses } = demo
+      ? { ...real, rules: buildBriefing(demo.input), input: demo.input }
+      : real;
     // An offer carries its own why (in the row); no extra AI line on top of it.
     const why = rules.suggestion
       ? null
