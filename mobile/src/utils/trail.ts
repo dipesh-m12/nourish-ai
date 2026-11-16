@@ -26,6 +26,12 @@ const MAX_JUMP_MS = 10;
  */
 const MOVE_WINDOW_MS = 5000;
 const MOVE_MIN_M = 4.5;
+/**
+ * The walk clock's own check is steadier (it decides auto-pause, so a false "standing" while
+ * walking is the worst error): 10 s windows, 7 m. Walking moves ~13 m; drift rarely 7.
+ */
+const CLOCK_WINDOW_MS = 10_000;
+const CLOCK_MIN_M = 7;
 
 /** The smoother's state: the best guess of where you are, and how sure it is (m²). */
 export interface TrailFilter {
@@ -33,7 +39,7 @@ export interface TrailFilter {
   lat: number;
   variance: number;
   t: number;
-  /** Raw fixes of the last two windows [lng, lat, t], for the moving check. */
+  /** Raw fixes of the last 20 s [lng, lat, t], for the moving checks. */
   recent?: [number, number, number][];
 }
 
@@ -82,7 +88,7 @@ export function extendTrail(
   const next = smooth(filter, fix);
   const point: LngLat = [next.lng, next.lat];
   // Raw fixes of the last two windows, oldest first.
-  const recent = (next.recent ?? []).filter(([, , t]) => fix.t - t < 2 * MOVE_WINDOW_MS);
+  const recent = (next.recent ?? []).filter(([, , t]) => fix.t - t < 2 * CLOCK_WINDOW_MS);
   recent.push([fix.lng, fix.lat, fix.t]);
   next.recent = recent;
   const last = trail.at(-1);
@@ -90,21 +96,35 @@ export function extendTrail(
     trail.push(point);
     return next;
   }
-  if (!still && movedLately(recent, fix.t) && metresBetween(last, point) >= TRAIL_STEP_M)
+  if (
+    !still &&
+    movedLately(recent, fix.t, MOVE_WINDOW_MS, MOVE_MIN_M) &&
+    metresBetween(last, point) >= TRAIL_STEP_M
+  )
     trail.push(point);
   return next;
 }
 
-/** The average position of this window moved MOVE_MIN_M from the one before it. */
-function movedLately(recent: [number, number, number][], now: number) {
-  const nowWin = recent.filter(([, , t]) => now - t < MOVE_WINDOW_MS);
-  const before = recent.filter(([, , t]) => now - t >= MOVE_WINDOW_MS);
+/** Moving by GPS alone, for the walk clock (auto-pause): 10 s windows, 7 m. */
+export function gpsMoving(filter: TrailFilter | null, now: number) {
+  return filter?.recent ? movedLately(filter.recent, now, CLOCK_WINDOW_MS, CLOCK_MIN_M) : false;
+}
+
+/** The average position of the last `windowMs` moved `minM` from the window before it. */
+function movedLately(
+  recent: [number, number, number][],
+  now: number,
+  windowMs: number,
+  minM: number,
+) {
+  const nowWin = recent.filter(([, , t]) => now - t < windowMs);
+  const before = recent.filter(([, , t]) => now - t >= windowMs && now - t < 2 * windowMs);
   if (nowWin.length < 2 || before.length < 2) return false;
   const mean = (w: [number, number, number][]): LngLat => [
     w.reduce((a, p) => a + p[0], 0) / w.length,
     w.reduce((a, p) => a + p[1], 0) / w.length,
   ];
-  return metresBetween(mean(before), mean(nowWin)) >= MOVE_MIN_M;
+  return metresBetween(mean(before), mean(nowWin)) >= minM;
 }
 
 /** Length of a drawn route, in metres. */

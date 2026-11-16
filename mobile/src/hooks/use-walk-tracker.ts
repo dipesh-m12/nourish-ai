@@ -5,28 +5,21 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { onlineManager } from '@tanstack/react-query';
 import { AppState, Platform } from 'react-native';
 import { sessionsApi } from '@/api/sessions';
+import { ApiError } from '@/lib/api-client';
 import { stepsBetween } from '@/lib/health';
 import { drainFixes, startBackgroundWalk, stopBackgroundWalk, type RawFix } from '@/lib/walk-task';
 import { metresBetween, type LngLat } from '@/utils/geo';
-import { extendTrail, type TrailFilter } from '@/utils/trail';
+import { extendTrail, gpsMoving, type TrailFilter } from '@/utils/trail';
 
-/** GPS fixes worse than this are ignored (indoors they wander by tens of metres). */
-const MAX_ACCURACY_M = 25;
 /**
- * Sitting still, GPS wanders inside its accuracy circle. A fix only counts once it leaves
- * that circle (and at least MIN_STEP_M) from the last counted point, so jitter never adds up.
+ * Auto-pause: the clock stops only after this long with NO sign of moving from any source (a
+ * step, the GPS's own speed, or the route moving). It used to be 8 s on steps or a 10-25 m GPS
+ * jump, which at walking pace (and with Android batching steps) paused people mid-walk.
  */
-const MIN_STEP_M = 10;
-const MAX_STEP_M = 120;
-/** Faster than a brisk run between fixes = a glitch, not a walk. */
-const MAX_SPEED_MS = 6; // default (walking); a bike passes its own via options
-/** No step and no real move for this long = standing still: the clock stops (auto-pause). */
-const STILL_AFTER_MS = 8000;
-/**
- * GPS is only ignored as "feet still" after this long with no step: Android's step counter
- * reports in batches, so a shorter window drops real points and leaves the route blank.
- */
-const FEET_STILL_MS = 20_000;
+const STILL_AFTER_MS = 20_000;
+/** The GPS's own (Doppler) speed above this = walking, if the fix is decent. */
+const MOVING_SPEED_MS = 0.6;
+const SPEED_ACCURACY_M = 30;
 /**
  * The drawn route stops while the step counter says you're standing (no step this long). Shorter
  * than FEET_STILL_MS: a pause in drawing costs a short straight bit; drawing drift costs a scribble.
@@ -68,8 +61,8 @@ export interface WalkState {
   trail?: TrailFilter | null;
   /** Last moment the app's clock ran. */
   lastTickAt: number;
-  /** Last counted GPS point. */
-  anchor: LngLat | null;
+  /** Walks saved by builds before the route-based distance; no longer used. */
+  anchor?: LngLat | null;
   /** Fixes come from the background service (true) or only while the screen is open. */
   background: boolean;
 }
@@ -106,7 +99,7 @@ export function downsample(path: LngLat[], max = 1000): LngLat[] {
  * - the distance: strict, so sitting still adds nothing. With a step counter, GPS only counts
  *   while steps are coming in; without one, a fix must leave its own accuracy circle.
  */
-export function useWalkTracker({ maxSpeed = MAX_SPEED_MS }: { maxSpeed?: number } = {}) {
+export function useWalkTracker() {
   const [walk, setWalk] = useState<WalkState | null>(null);
   const [moving, setMoving] = useState(false);
   const [restored, setRestored] = useState<'none' | 'checking' | 'resumed'>('checking');
@@ -123,6 +116,13 @@ export function useWalkTracker({ maxSpeed = MAX_SPEED_MS }: { maxSpeed?: number 
   const lastFixT = useRef(0);
   const lastCheckpoint = useRef(0);
   const lastStartTry = useRef(0);
+  /**
+   * A server start is in flight. Only one at a time: the server keeps one active walk and a
+   * second start cancels the first, which is how walks ended up "already ended" on Finish.
+   */
+  const starting = useRef(false);
+  /** Dev builds: a pretend walk feeds the tracker instead of the real GPS (see simulate). */
+  const simulating = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const publish = useCallback(() => {
     const s = ref.current;
@@ -151,44 +151,71 @@ export function useWalkTracker({ maxSpeed = MAX_SPEED_MS }: { maxSpeed?: number 
     });
   }, [publish]);
 
-  /** Scores one GPS fix. `live` = it arrived just now with the screen open. */
-  const takeFix = useCallback(
-    (fix: RawFix, live: boolean) => {
-      const s = ref.current;
-      if (!s || s.status !== 'running') return;
-      // The route first, with its own looser rules: it must show the loop you walked.
-      const standing =
-        live && hasPedometer.current && Date.now() - lastStepAt.current > TRAIL_STILL_MS;
-      s.trail = extendTrail(s.path, s.trail ?? null, fix, standing);
-
-      // Then the distance, strictly.
-      const accuracy = fix.acc ?? MAX_ACCURACY_M;
-      if (accuracy > MAX_ACCURACY_M) return;
-      const point: LngLat = [fix.lng, fix.lat];
-      const prev = s.anchor;
-      const prevT = lastFixT.current;
-      lastFixT.current = fix.t;
-      if (!prev) {
-        s.anchor = point;
-        return;
+  /**
+   * Opens this walk's server session, once: the in-flight flag stops the 1 s clock from
+   * sending a second start (which would cancel the first). Failure = stays on the phone; the
+   * clock tries again later.
+   */
+  const openSession = useCallback(
+    async (cur: WalkState, activity?: string) => {
+      if (starting.current || cur.sessionId) return;
+      starting.current = true;
+      lastStartTry.current = Date.now();
+      try {
+        const session = await sessionsApi.start({
+          kind: 'walk',
+          challengeId: cur.challengeId ?? undefined,
+          date: cur.date,
+          data: { title: cur.title, ...(activity && { activity }) },
+        });
+        // Still the same walk (not cleared or replaced meanwhile): keep its id.
+        if (ref.current === cur && !cur.sessionId) {
+          cur.sessionId = session.id;
+          lastCheckpoint.current = 0; // send the walk so far straight away
+          publish();
+        }
+      } catch {
+        // stays local; retried by the clock
+      } finally {
+        starting.current = false;
       }
-      const moved = metresBetween(prev, point);
-      // Inside the accuracy circle: jitter. Keep the anchor and count nothing.
-      if (moved < Math.max(MIN_STEP_M, accuracy)) return;
-      const secs = Math.max(1, (fix.t - prevT) / 1000);
-      const glitch = moved > MAX_STEP_M * Math.max(1, secs / 10) || moved / secs > maxSpeed;
-      // With the screen open and a step counter, GPS only counts while the feet move too.
-      const feetStill =
-        live && hasPedometer.current && Date.now() - lastStepAt.current > FEET_STILL_MS;
-      s.anchor = point; // re-anchor either way, so a skipped jump is never added later
-      if (glitch || feetStill) return;
-      s.metres += moved;
-      if (live) lastMoveAt.current = Date.now();
-      // Background fixes carry their own clock: close-together ones mean walking in between.
-      else if (prevT && fix.t - prevT <= MOVING_GAP_MS) s.movingMs += fix.t - prevT;
     },
-    [maxSpeed],
+    [publish],
   );
+
+  /** Scores one GPS fix. `live` = it arrived just now with the screen open. */
+  const takeFix = useCallback((fix: RawFix, live: boolean) => {
+    const s = ref.current;
+    if (!s || s.status !== 'running') return;
+    // The route (utils/trail.ts): smoothed, a point every few metres while moving, nothing
+    // while the step counter says you're standing. Distance is the route's length, so the
+    // number and the line on the map always agree.
+    // Standing: the step counter says so, or the walk clock has already auto-paused (no sign of
+    // moving from any source for STILL_AFTER_MS), so GPS drift never draws while you stand.
+    const now = Date.now();
+    const standing =
+      live &&
+      ((hasPedometer.current && now - lastStepAt.current > TRAIL_STILL_MS) ||
+        now - lastMoveAt.current > STILL_AFTER_MS);
+    const tail = s.path.at(-1);
+    const before = s.path.length;
+    s.trail = extendTrail(s.path, s.trail ?? null, fix, standing);
+    const grew = tail !== undefined && s.path.length > before;
+    if (grew) s.metres += metresBetween(tail, s.path.at(-1)!);
+
+    // Any sign of moving keeps the clock running: the GPS's own speed, or the average position
+    // moving over 10 s (steps count too, in the pedometer callback). Not "the route grew": its
+    // 5 s check is tuned for drawing and drift can fool it while standing.
+    const prevT = lastFixT.current;
+    lastFixT.current = fix.t;
+    const fast = (fix.speed ?? 0) >= MOVING_SPEED_MS && (fix.acc ?? Infinity) <= SPEED_ACCURACY_M;
+    // The clock's own check runs even while "standing", so walking again restarts it.
+    if (!(fast || gpsMoving(s.trail, fix.t))) return;
+    if (live && hasPedometer.current && now - lastStepAt.current > TRAIL_STILL_MS) return;
+    if (live) lastMoveAt.current = now;
+    // Background fixes carry their own clock: close-together ones mean walking in between.
+    else if (prevT && fix.t - prevT <= MOVING_GAP_MS) s.movingMs += fix.t - prevT;
+  }, []);
 
   /** The app was asleep or closed from lastTickAt until now: work out what happened. */
   const fillGap = useCallback(
@@ -235,9 +262,15 @@ export function useWalkTracker({ maxSpeed = MAX_SPEED_MS }: { maxSpeed?: number 
         // A fix a second: corners of a small loop need it (the route filters the noise).
         { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 0 },
         ({ coords, timestamp }) => {
-          if (!live) return;
+          if (!live || simulating.current) return;
           takeFix(
-            { lng: coords.longitude, lat: coords.latitude, acc: coords.accuracy, t: timestamp },
+            {
+              lng: coords.longitude,
+              lat: coords.latitude,
+              acc: coords.accuracy,
+              t: timestamp,
+              speed: coords.speed,
+            },
             true,
           );
         },
@@ -272,7 +305,7 @@ export function useWalkTracker({ maxSpeed = MAX_SPEED_MS }: { maxSpeed?: number 
       // Background fixes that arrived while the screen was on (service mode).
       if (cur.background)
         void drainFixes().then((fixes) => {
-          for (const f of fixes) takeFix(f, true);
+          if (!simulating.current) for (const f of fixes) takeFix(f, true);
         });
       const delta = now - cur.lastTickAt;
       cur.lastTickAt = now;
@@ -286,24 +319,11 @@ export function useWalkTracker({ maxSpeed = MAX_SPEED_MS }: { maxSpeed?: number 
       // the phone meanwhile, and the next checkpoint sends all of it).
       if (
         !cur.sessionId &&
+        !starting.current &&
         onlineManager.isOnline() &&
         now - lastStartTry.current > START_RETRY_MS
-      ) {
-        lastStartTry.current = now;
-        void sessionsApi
-          .start({
-            kind: 'walk',
-            challengeId: cur.challengeId ?? undefined,
-            date: cur.date,
-            data: { title: cur.title },
-          })
-          .then((session) => {
-            if (ref.current !== cur || cur.sessionId) return;
-            cur.sessionId = session.id;
-            lastCheckpoint.current = 0;
-          })
-          .catch(() => undefined);
-      }
+      )
+        void openSession(cur);
       // A checkpoint on the server now and then: a lost phone still has the walk so far.
       if (cur.sessionId && now - lastCheckpoint.current > CHECKPOINT_MS) {
         lastCheckpoint.current = now;
@@ -316,7 +336,14 @@ export function useWalkTracker({ maxSpeed = MAX_SPEED_MS }: { maxSpeed?: number 
             awayMs: Math.round(cur.awayMs),
             path: downsample(cur.path),
           })
-          .catch(() => undefined);
+          .catch((err: unknown) => {
+            // The server no longer has this walk running (ended, replaced): open a fresh one;
+            // the next checkpoint sends everything, and Finish logs it.
+            if (err instanceof ApiError && (err.status === 409 || err.status === 404)) {
+              if (ref.current === cur) cur.sessionId = null;
+              lastStartTry.current = 0;
+            }
+          });
       }
     }, 1000);
 
@@ -342,7 +369,7 @@ export function useWalkTracker({ maxSpeed = MAX_SPEED_MS }: { maxSpeed?: number 
       offOnline();
       setMoving(false);
     };
-  }, [running, fillGap, takeFix, publish]);
+  }, [running, fillGap, takeFix, publish, openSession]);
 
   const start = async (args: {
     challengeId: string | null;
@@ -368,28 +395,14 @@ export function useWalkTracker({ maxSpeed = MAX_SPEED_MS }: { maxSpeed?: number 
       awayMs: 0,
       path: [],
       lastTickAt: now,
-      anchor: null,
       background,
     };
     lastMoveAt.current = now; // the first seconds count while you get going
     lastStepAt.current = now;
     wasMoving.current = true;
     publish();
-    // The server copy is a bonus: offline, the walk still works and logs the old way.
-    try {
-      const session = await sessionsApi.start({
-        kind: 'walk',
-        challengeId: args.challengeId ?? undefined,
-        date: args.date,
-        data: { title: args.title, ...(args.activity && { activity: args.activity }) },
-      });
-      if (ref.current) {
-        ref.current.sessionId = session.id;
-        publish();
-      }
-    } catch {
-      // stays local
-    }
+    // The server copy is a bonus: offline, the walk still works and is sent later.
+    await openSession(ref.current, args.activity);
   };
 
   const pause = () => {
@@ -407,7 +420,6 @@ export function useWalkTracker({ maxSpeed = MAX_SPEED_MS }: { maxSpeed?: number 
     if (!s) return;
     s.status = 'running';
     s.lastTickAt = Date.now(); // a pause never counts as time away
-    s.anchor = null; // nor as distance
     s.trail = null; // the route picks up from where you are now
     lastMoveAt.current = Date.now();
     lastStepAt.current = Date.now();
@@ -415,8 +427,62 @@ export function useWalkTracker({ maxSpeed = MAX_SPEED_MS }: { maxSpeed?: number 
     publish();
   };
 
+  const [simulated, setSimulated] = useState(false);
+  const stopSimulation = () => {
+    if (simulating.current) clearInterval(simulating.current);
+    simulating.current = null;
+    setSimulated(false);
+  };
+
+  /**
+   * Dev builds only: a pretend walk, so the whole flow (route, auto-pause, checkpoints, Finish
+   * and the log) can be checked without going outside. Walks a 30 x 20 m loop around the last
+   * known position at 1.3 m/s, one fix (with a little jitter) and two steps a second, through
+   * the same takeFix as the real GPS, which is ignored meanwhile.
+   */
+  const simulate = async () => {
+    if (!__DEV__ || simulating.current || !ref.current) return;
+    const here = await Location.getLastKnownPositionAsync().catch(() => null);
+    const lat0 = here?.coords.latitude ?? 28.6139;
+    const lng0 = here?.coords.longitude ?? 77.209;
+    const mLng = 111_320 * Math.cos((lat0 * Math.PI) / 180);
+    const [W, H, speed] = [30, 20, 1.3];
+    const per = 2 * (W + H);
+    let along = 0;
+    const jitter = () => (Math.random() - 0.5) * 4;
+    setSimulated(true);
+    simulating.current = setInterval(() => {
+      const s = ref.current;
+      if (!s) return stopSimulation();
+      if (s.status !== 'running') return;
+      along = (along + speed) % per;
+      let d = along;
+      let x: number;
+      let y: number;
+      if (d < W) [x, y] = [d, 0];
+      else if ((d -= W) < H) [x, y] = [W, d];
+      else if ((d -= H) < W) [x, y] = [W - d, H];
+      else [x, y] = [0, H - (d - W)];
+      const now = Date.now();
+      takeFix(
+        {
+          lng: lng0 + (x + jitter()) / mLng,
+          lat: lat0 + (y + jitter()) / 111_320,
+          acc: 8,
+          t: now,
+          speed,
+        },
+        true,
+      );
+      s.steps += 2;
+      lastStepAt.current = now;
+      lastMoveAt.current = now;
+    }, 1000);
+  };
+
   /** Finished or thrown away: stop the service and forget the walk on this phone. */
   const clear = async () => {
+    stopSimulation();
     ref.current = null;
     setWalk(null);
     await stopBackgroundWalk();
@@ -445,5 +511,8 @@ export function useWalkTracker({ maxSpeed = MAX_SPEED_MS }: { maxSpeed?: number 
     pause,
     resume,
     clear,
+    /** Dev builds only (undefined in release). */
+    simulate: __DEV__ ? simulate : undefined,
+    simulated,
   };
 }

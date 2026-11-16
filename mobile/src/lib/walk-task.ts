@@ -21,6 +21,8 @@ export interface RawFix {
   acc: number | null;
   /** ms since epoch. */
   t: number;
+  /** m/s from the GPS itself (Doppler), when the phone gives it. */
+  speed?: number | null;
 }
 
 // Storage is read-modify-write: one writer at a time (the task and the screen share this module).
@@ -49,6 +51,7 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(
       lat: l.coords.latitude,
       acc: l.coords.accuracy ?? null,
       t: l.timestamp,
+      speed: l.coords.speed ?? null,
     }));
     await locked(async () => {
       // Keep the newest 10 000 (~2¾ h at one a second, < 1 MB): a long walk never grows storage

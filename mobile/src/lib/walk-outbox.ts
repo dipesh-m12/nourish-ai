@@ -34,7 +34,20 @@ const write = (items: PendingWalk[]) =>
 export const isNetworkError = (err: unknown) => err instanceof ApiError && err.status === 0;
 
 /** Starts the server session if it never got one, then finishes it (logs + trophy). */
-export async function sendWalk(walk: PendingWalk) {
+export async function sendWalk(walk: PendingWalk): ReturnType<typeof sessionsApi.finish> {
+  try {
+    return await finishOnce(walk);
+  } catch (err) {
+    // The server had already ended that session (replaced by another start, or cancelled):
+    // the walk itself is all here, so open a fresh session and log it there, once.
+    const gone = err instanceof ApiError && (err.status === 409 || err.status === 404);
+    if (!gone || !walk.sessionId) throw err;
+    walk.sessionId = null;
+    return finishOnce(walk);
+  }
+}
+
+async function finishOnce(walk: PendingWalk) {
   let id = walk.sessionId;
   if (!id) {
     const session = await sessionsApi.start({

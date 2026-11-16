@@ -181,6 +181,17 @@ export default function WalkScreen() {
           </Animated.View>
         </View>
 
+        {/* Dev builds: walk a pretend loop, to test the flow without going outside. */}
+        {walk.simulate && walk.status === 'running' && !walk.simulated && (
+          <Pressable
+            onPress={() => void walk.simulate?.()}
+            accessibilityRole="button"
+            accessibilityLabel="Simulate a walk"
+            className="mt-2 self-start rounded-full bg-primary-soft px-3 py-1.5"
+          >
+            <Text className="text-xs text-primary">Simulate a loop (dev)</Text>
+          </Pressable>
+        )}
         {walk.status !== 'idle' && !walk.background && (
           <Text className="mt-2 text-xs text-muted">Keep the app open for the route.</Text>
         )}
