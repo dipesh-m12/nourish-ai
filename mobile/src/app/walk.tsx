@@ -107,8 +107,10 @@ export default function WalkScreen() {
         toast('Saved on your phone. It syncs when you’re online.');
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      await walk.clear();
+      // The trophy first: it replaces the screen, so the map goes away in one piece. Clearing
+      // the walk while the map was still up emptied its route under it (a native crash).
       setSummary({ ...done, calories });
+      await walk.clear();
     } catch (err) {
       setNote(err instanceof Error ? err.message : 'Couldn’t save the walk.');
       walk.resume();

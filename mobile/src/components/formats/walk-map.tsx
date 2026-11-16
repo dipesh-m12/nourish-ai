@@ -82,50 +82,66 @@ export function WalkMap({ path, breaks, locate }: Props) {
       >
         <Camera ref={camera} initialViewState={{ center: [78.9629, 20.5937], zoom: 3.5 }} />
         {locate && <UserLocation animated accuracy />}
-        {pieces.length > 0 && (
-          <GeoJSONSource
-            id="walk-path"
-            data={{
-              type: 'Feature',
-              properties: {},
-              geometry: { type: 'MultiLineString', coordinates: pieces },
+        {/*
+          Both sources stay mounted for the map's whole life and only their data changes (empty
+          when there's nothing to draw). Unmounting a source while the map is up (the walk being
+          cleared on Finish) makes MapLibre remove a source its layers still use, which throws
+          natively on Android and closed the app.
+        */}
+        <GeoJSONSource
+          id="walk-path"
+          data={{
+            type: 'FeatureCollection',
+            features: pieces.length
+              ? [
+                  {
+                    type: 'Feature',
+                    properties: {},
+                    geometry: { type: 'MultiLineString', coordinates: pieces },
+                  },
+                ]
+              : [],
+          }}
+        >
+          <Layer
+            id="walk-line-edge"
+            type="line"
+            layout={{ 'line-cap': 'round', 'line-join': 'round' }}
+            paint={{ 'line-color': '#FFFFFF', 'line-width': 10 }}
+          />
+          <Layer
+            id="walk-line"
+            type="line"
+            layout={{ 'line-cap': 'round', 'line-join': 'round' }}
+            paint={{ 'line-color': colors.primary, 'line-width': 6 }}
+          />
+        </GeoJSONSource>
+        <GeoJSONSource
+          id="walk-start"
+          data={{
+            type: 'FeatureCollection',
+            features: path.length
+              ? [
+                  {
+                    type: 'Feature',
+                    properties: {},
+                    geometry: { type: 'Point', coordinates: path[0]! },
+                  },
+                ]
+              : [],
+          }}
+        >
+          <Layer
+            id="walk-start-dot"
+            type="circle"
+            paint={{
+              'circle-radius': 7,
+              'circle-color': colors.primary,
+              'circle-stroke-width': 3,
+              'circle-stroke-color': '#FFFFFF',
             }}
-          >
-            <Layer
-              id="walk-line-edge"
-              type="line"
-              layout={{ 'line-cap': 'round', 'line-join': 'round' }}
-              paint={{ 'line-color': '#FFFFFF', 'line-width': 10 }}
-            />
-            <Layer
-              id="walk-line"
-              type="line"
-              layout={{ 'line-cap': 'round', 'line-join': 'round' }}
-              paint={{ 'line-color': colors.primary, 'line-width': 6 }}
-            />
-          </GeoJSONSource>
-        )}
-        {path.length > 0 && (
-          <GeoJSONSource
-            id="walk-start"
-            data={{
-              type: 'Feature',
-              properties: {},
-              geometry: { type: 'Point', coordinates: path[0]! },
-            }}
-          >
-            <Layer
-              id="walk-start-dot"
-              type="circle"
-              paint={{
-                'circle-radius': 7,
-                'circle-color': colors.primary,
-                'circle-stroke-width': 3,
-                'circle-stroke-color': '#FFFFFF',
-              }}
-            />
-          </GeoJSONSource>
-        )}
+          />
+        </GeoJSONSource>
       </Map>
 
       {locate && !following && (
