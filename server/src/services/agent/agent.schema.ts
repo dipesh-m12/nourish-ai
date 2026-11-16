@@ -43,6 +43,8 @@ export const turnSchema = z.strictObject({
       'log_challenge',
       'log_sleep',
       'change_challenges',
+      'new_challenges',
+      'level_challenge',
       'remove_last',
     ]),
     /** log_meal: the food in the user's words, with portions ("2 rotis, 1 bowl dal"). */
@@ -63,6 +65,10 @@ export const turnSchema = z.strictObject({
     dropIds: z.array(z.string().max(40)).max(10),
     /** remove_last */
     removeTarget: z.enum(['none', 'meal', 'activity']),
+    /** new_challenges: what they want to achieve, in their words ("sleep better", "less sugar"). */
+    goalText: z.string().max(200),
+    /** level_challenge: one step harder ("up") or easier ("down"), from today. challengeId too. */
+    direction: z.enum(['none', 'up', 'down']),
   }),
   /**
    * Look something up first (server-side tools): the server runs it, adds the result to the

@@ -21,6 +21,7 @@ import type {
   ChallengeCard,
   ChangeCard,
   CreateChallengesCard,
+  LevelCard,
   MealCard,
   RemoveCard,
   SleepCard,
@@ -37,6 +38,7 @@ const KIND_LABEL: Record<AgentAction['kind'], string> = {
   log_sleep: 'Sleep',
   change_challenges: 'Your challenges',
   create_challenges: 'New challenges',
+  level_challenge: 'New goal',
   remove_last: 'Undo',
 };
 
@@ -405,6 +407,19 @@ function CardBody({ action }: { action: AgentAction }) {
               <Text className="ml-3 text-xs text-muted">{c.why}</Text>
             </View>
           ))}
+        </View>
+      );
+    }
+    case 'level_challenge': {
+      const l = p as unknown as LevelCard;
+      const unit = l.unit ? ` ${l.unit}` : '';
+      return (
+        <View className="mt-1.5 flex-row items-baseline gap-2">
+          <Text className="flex-1 font-sans-semibold" numberOfLines={1}>
+            {l.title}
+          </Text>
+          <Text className="text-sm text-muted line-through">{`${l.from}${unit}`}</Text>
+          <Text className="font-sans-semibold text-primary">{`${l.to}${unit}`}</Text>
         </View>
       );
     }

@@ -12,6 +12,7 @@ import { activeKcalAt, MAX_SLEEP_HOURS, MET, sleepKcal } from '../burn/burn.math
 import { burnService } from '../burn/burn.service';
 import { challengeGoalService } from '../challenges/challenge-goal.service';
 import { challengeProgressService } from '../challenges/challenge-progress.service';
+import { changedRecently, goalOn, nextTarget } from '../challenges/level';
 import { exerciseService } from '../exercises/exercise.service';
 import { mealService } from '../meals/meal.service';
 import { planService } from '../plan/plan.service';
@@ -193,6 +194,45 @@ export async function prepare(
       };
     }
 
+    // A new goal in their words: the same AI proposals as the "+" sheet (duplicates of what's
+    // running dropped in code), shown as a card; nothing is saved until they confirm.
+    case 'new_challenges': {
+      const text = p.goalText.trim();
+      if (!text) return { error: 'What would you like to work on?' };
+      const r = await challengeGoalService.propose(profileId, { date, text });
+      if (r.full) return { error: 'You have a full day already. Finish or drop one first?' };
+      if (!r.proposals.length) return { error: r.reply };
+      return {
+        kind: 'create_challenges',
+        payload: { items: r.proposals.map(({ ask: _ask, ...c }) => c) },
+      };
+    }
+
+    // One step harder or easier from today (earlier days keep their goal), like the Week screen.
+    case 'level_challenge': {
+      const c = ctx.raw.challenges.find((x) => x.id === p.challengeId);
+      if (!c)
+        return { error: 'Which one? Pick it from your challenges.', ask: { kind: 'challenges' } };
+      if (p.direction === 'none') return { error: 'Make it harder or easier?' };
+      const label = c.tracking.label ?? c.title;
+      const to = nextTarget(c.tracking, c.category, p.direction);
+      if (to === null)
+        return { error: `${label} keeps its goal (water, sleep and simple checks don't step).` };
+      if (changedRecently(c.tracking, date))
+        return { error: `${label} changed this week. Give it a few days at this level first.` };
+      return {
+        kind: 'level_challenge',
+        payload: {
+          id: c.id,
+          title: label,
+          from: goalOn(c.tracking, date),
+          to,
+          unit: c.tracking.unit,
+          direction: p.direction,
+        },
+      };
+    }
+
     case 'remove_last': {
       if (p.removeTarget === 'meal') {
         const [m] = await db
@@ -358,6 +398,23 @@ export async function execute(
         ok: true,
         summary: `${rows.length} challenge${rows.length > 1 ? 's' : ''} on your day`,
         result: { created: rows.length },
+      };
+    }
+
+    case 'level_challenge': {
+      const r = await challengeGoalService.setLevel(
+        profileId,
+        payload.id as string,
+        date,
+        payload.direction as 'up' | 'down',
+      );
+      return {
+        ok: true,
+        summary: `${payload.title as string}: ${r.to} ${r.unit ?? ''} from today`.replace(
+          /\s+from/,
+          ' from',
+        ),
+        result: r,
       };
     }
 

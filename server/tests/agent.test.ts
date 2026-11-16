@@ -38,6 +38,8 @@ export function turn(overrides: Partial<Turn> = {}): Turn {
       acceptIds: [],
       dropIds: [],
       removeTarget: 'none',
+      goalText: '',
+      direction: 'none',
     },
     read: { tool: 'none', query: '' },
     ...overrides,

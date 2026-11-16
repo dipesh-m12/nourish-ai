@@ -31,7 +31,18 @@ export type AgentActionKind =
   | 'log_sleep'
   | 'change_challenges'
   | 'create_challenges'
+  | 'level_challenge'
   | 'remove_last';
+
+/** A running challenge one step harder or easier, from today. */
+export interface LevelCard {
+  id: string;
+  title: string;
+  from: number;
+  to: number;
+  unit: string | null;
+  direction: 'up' | 'down';
+}
 
 /** Challenges proposed from a report, saved on confirm. */
 export interface CreateChallengesCard {
