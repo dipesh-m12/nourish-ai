@@ -2,7 +2,7 @@ import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { Check, ChevronLeft, Search, X } from 'lucide-react-native';
+import { Check, ChevronLeft, LocateFixed, Search, X } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { Keyboard, Platform, Pressable, ScrollView, Switch, TextInput, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
@@ -176,13 +176,27 @@ export default function PlaceScreen() {
 
   return (
     <View className="flex-1 bg-bg">
-      <PlaceMap
-        place={place}
-        locate={allowed === true}
-        draft={draft}
-        focus={focus}
-        onPick={(at) => pick(at, false)}
-      />
+      <View className="flex-1">
+        <PlaceMap
+          place={place}
+          locate={allowed === true}
+          draft={draft}
+          focus={focus}
+          onPick={(at) => pick(at, false)}
+        />
+        {/* My location: drops the pin where you stand (still asks "Pin it here?"). */}
+        <Pressable
+          onPress={() => here && pick(here, true)}
+          disabled={!here}
+          accessibilityRole="button"
+          accessibilityLabel="Pin where I am"
+          accessibilityState={{ disabled: !here }}
+          className={`absolute bottom-4 right-4 h-12 w-12 items-center justify-center rounded-full bg-card active:bg-bg ${here ? '' : 'opacity-50'}`}
+          style={LIFT}
+        >
+          <LocateFixed size={22} color={colors.primary} />
+        </Pressable>
+      </View>
 
       {/* Search on top, like a maps app: the keyboard never covers it. */}
       <SafeAreaView edges={['top']} className="absolute left-0 right-0 top-0 px-4">
@@ -280,14 +294,6 @@ export default function PlaceScreen() {
                     ? `${formatDistance(away)} away`
                     : 'Finding you…'}
           </Text>
-          {!draft && (
-            <Text className="mt-1 text-sm text-muted">
-              {place
-                ? 'Search above, or tap the map to move the pin.'
-                : 'Search above, or tap the map on the spot.'}
-            </Text>
-          )}
-
           {(note || allowed === false) && (
             <Text className="mt-2 text-sm text-danger">
               {note ?? 'Location is off. Allow it to check in.'}
@@ -307,14 +313,7 @@ export default function PlaceScreen() {
                   }}
                 />
               </>
-            ) : !place ? (
-              <Button
-                label="Pin where I am now"
-                onPress={() => pin(here)}
-                disabled={!here}
-                loading={setPlace.isPending}
-              />
-            ) : (
+            ) : !place ? null : (
               <>
                 {doneToday ? (
                   <View className="h-12 flex-row items-center justify-center gap-2 rounded-full bg-primary-soft">
@@ -341,12 +340,6 @@ export default function PlaceScreen() {
                     />
                   </View>
                 )}
-                <Button
-                  variant="ghost"
-                  label="Move the pin to where I am"
-                  onPress={() => pin(here)}
-                  disabled={!here || setPlace.isPending}
-                />
               </>
             )}
           </View>
