@@ -64,6 +64,8 @@ export function ChallengeCard({ challenge: c, onLog, onEdit }: Props) {
   const theme = CATEGORY_THEME[c.category];
   const Widget = WIDGETS[c.tracking.widget];
   const canLog = Boolean(c.session) || c.tracking.kind === 'amount' || !c.progress.done;
+  // Checked in today, but its screen is still where the pin is changed.
+  const opensPlace = !canLog && formatFor(c) === 'place';
   const label = shortLabel(c);
   // One quiet note at most: the end date matters more than the streak.
   const note =
@@ -109,7 +111,7 @@ export function ChallengeCard({ challenge: c, onLog, onEdit }: Props) {
 
       <PressableScale
         onPress={() => onLog(c)}
-        disabled={!canLog}
+        disabled={!canLog && !opensPlace}
         accessibilityRole="button"
         accessibilityLabel={`${actionLabel(c)}: ${c.title}`}
         // Ink pill on every tint: white-on-coral/mustard would fail 4.5:1 contrast.

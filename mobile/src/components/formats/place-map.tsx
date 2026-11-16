@@ -19,13 +19,15 @@ interface Props {
   draft?: LngLat | null;
   /** Tapping the map picks that spot (to pin it, or to move the pin). */
   onPick?: (at: LngLat) => void;
+  /** Fly here (a place picked from search). */
+  focus?: LngLat | null;
 }
 
 /**
  * The place and the blue dot on one map: you can see how far you are from where you're going.
  * Tap anywhere to pick a spot (the gym across town, not only where you stand).
  */
-export function PlaceMap({ place, locate, draft, onPick }: Props) {
+export function PlaceMap({ place, locate, draft, onPick, focus }: Props) {
   const camera = useRef<CameraRef>(null);
   // Camera moves before the map has loaded are dropped, so nothing moves until it has.
   const [ready, setReady] = useState(false);
@@ -44,6 +46,13 @@ export function PlaceMap({ place, locate, draft, onPick }: Props) {
       camera.current?.jumpTo({ center: [lng, lat], zoom: ZOOM });
     }
   }, [ready, place, lng, lat]);
+
+  // A search result: go there (the user didn't tap it on the map, so it may be off-screen).
+  const [focusLng, focusLat] = focus ?? [];
+  useEffect(() => {
+    if (!ready || focusLng === undefined || focusLat === undefined) return;
+    camera.current?.flyTo({ center: [focusLng, focusLat], zoom: ZOOM, duration: 900 });
+  }, [ready, focusLng, focusLat]);
 
   return (
     <View className="flex-1">

@@ -1,9 +1,10 @@
 import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ChevronLeft } from 'lucide-react-native';
+import { useQuery } from '@tanstack/react-query';
+import { Check, ChevronLeft, Search } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
-import { Platform, Pressable, Switch, View } from 'react-native';
+import { Keyboard, Platform, Pressable, Switch, TextInput, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSetPlace } from '@/api/challenges';
@@ -18,6 +19,8 @@ import {
   enableAutoCheckIn,
   syncGeofences,
 } from '@/lib/place-task';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
+import { searchPlaces } from '@/lib/place-search';
 import { localDate } from '@/utils/date';
 import { formatDistance, metresBetween, type LngLat } from '@/utils/geo';
 
@@ -40,8 +43,20 @@ export default function PlaceScreen() {
   const [allowed, setAllowed] = useState<boolean | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [done, setDone] = useState(false);
-  /** A spot tapped on the map, waiting for "Pin here". */
+  /** A spot tapped on the map (or found by search), waiting for "Pin here". */
   const [draft, setDraft] = useState<LngLat | null>(null);
+  /** Where the map flies to (a search result). */
+  const [focus, setFocus] = useState<LngLat | null>(null);
+  const [query, setQuery] = useState('');
+  const typed = useDebouncedValue(query.trim(), 400);
+  const search = useQuery({
+    queryKey: ['place-search', typed],
+    queryFn: () => searchPlaces(typed, here ?? place),
+    enabled: typed.length >= 3,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+  const doneToday = challenge?.progress.done === true;
 
   const place: LngLat | null = challenge?.place ? [challenge.place.lng, challenge.place.lat] : null;
   const radius = challenge?.place?.radiusM ?? 150;
@@ -76,6 +91,7 @@ export default function PlaceScreen() {
         onSuccess: () => {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           setDraft(null);
+          setFocus(null);
           setNote(null);
           // Auto check-in watches the old spot until the regions are refreshed.
           void today.refetch().then((r) => r.data && syncGeofences(r.data.challenges));
@@ -138,6 +154,7 @@ export default function PlaceScreen() {
         place={place}
         locate={allowed === true}
         draft={draft}
+        focus={focus}
         onPick={(at) => {
           Haptics.selectionAsync();
           setDraft(at);
@@ -173,8 +190,64 @@ export default function PlaceScreen() {
         </Text>
         {!draft && (
           <Text className="mt-1 text-sm text-muted">
-            {place ? 'Tap the map to move the pin.' : 'Tap the map on the spot.'}
+            {place
+              ? 'Search or tap the map to move the pin.'
+              : 'Search, or tap the map on the spot.'}
           </Text>
+        )}
+
+        {/* Find it by name instead of standing there (OpenStreetMap places near you). */}
+        {!draft && (
+          <View className="mt-3 h-12 flex-row items-center gap-2 rounded-2xl bg-bg px-4">
+            <Search size={18} color={colors.muted} />
+            <TextInput
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Search a gym, park…"
+              placeholderTextColor={colors.muted}
+              returnKeyType="search"
+              accessibilityLabel="Search for a place"
+              className="flex-1 font-sans text-base text-ink"
+              style={{ includeFontPadding: false }}
+            />
+          </View>
+        )}
+        {!draft && typed.length >= 3 && (
+          <View className="mt-2 overflow-hidden rounded-2xl bg-bg">
+            {search.isPending && <Text className="px-4 py-3 text-sm text-muted">Searching…</Text>}
+            {search.isError && (
+              <Text className="px-4 py-3 text-sm text-danger">{search.error.message}</Text>
+            )}
+            {search.isSuccess && search.data.length === 0 && (
+              <Text className="px-4 py-3 text-sm text-muted">
+                Nothing found nearby. Tap the map instead.
+              </Text>
+            )}
+            {search.data?.map((hit, i) => (
+              <Pressable
+                key={hit.id}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  Keyboard.dismiss();
+                  setQuery('');
+                  setDraft(hit.at);
+                  setFocus(hit.at);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={`${hit.name}, ${hit.detail}`}
+                className={`min-h-12 justify-center px-4 py-2 ${i > 0 ? 'border-t border-line' : ''}`}
+              >
+                <Text className="font-sans-semibold" numberOfLines={1}>
+                  {hit.name}
+                </Text>
+                {hit.detail ? (
+                  <Text className="text-xs text-muted" numberOfLines={1}>
+                    {hit.detail}
+                  </Text>
+                ) : null}
+              </Pressable>
+            ))}
+          </View>
         )}
         {(note || allowed === false) && (
           <Text className="mt-2 text-sm text-danger">
@@ -186,7 +259,14 @@ export default function PlaceScreen() {
           {draft ? (
             <>
               <Button label="Pin here" onPress={() => pin(draft)} loading={setPlace.isPending} />
-              <Button variant="ghost" label="Cancel" onPress={() => setDraft(null)} />
+              <Button
+                variant="ghost"
+                label="Cancel"
+                onPress={() => {
+                  setDraft(null);
+                  setFocus(null);
+                }}
+              />
             </>
           ) : !place ? (
             <Button
@@ -197,12 +277,19 @@ export default function PlaceScreen() {
             />
           ) : (
             <>
-              <Button
-                label="Check in"
-                onPress={checkIn}
-                disabled={!arrived}
-                loading={log.isPending}
-              />
+              {doneToday ? (
+                <View className="h-12 flex-row items-center justify-center gap-2 rounded-full bg-primary-soft">
+                  <Check size={18} color={colors.primary} />
+                  <Text className="font-sans-semibold text-primary">Checked in today</Text>
+                </View>
+              ) : (
+                <Button
+                  label="Check in"
+                  onPress={checkIn}
+                  disabled={!arrived}
+                  loading={log.isPending}
+                />
+              )}
               {Platform.OS !== 'web' && (
                 <View className="mt-1 flex-row items-center gap-3 rounded-2xl bg-bg px-4 py-2">
                   <Text className="flex-1 font-sans-semibold">Check in automatically</Text>
