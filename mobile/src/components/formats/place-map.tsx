@@ -37,15 +37,18 @@ export function PlaceMap({ place, locate, draft, onPick, focus }: Props) {
   const centred = useRef(false);
 
   // The pinned place, or else the phone once its first fix arrives: open on the street, not
-  // the whole country.
+  // the whole country. Keyed on the pin's numbers, not the array (rebuilt every render): the
+  // camera must only move when the pin itself moves, never while the user pans to pick a spot.
+  const [pinLng, pinLat] = place ?? [];
   useEffect(() => {
     if (!ready) return;
-    if (place) camera.current?.jumpTo({ center: place, zoom: 15 });
+    if (pinLng !== undefined && pinLat !== undefined)
+      camera.current?.jumpTo({ center: [pinLng, pinLat], zoom: 15 });
     else if (lng !== undefined && lat !== undefined && !centred.current) {
       centred.current = true;
       camera.current?.jumpTo({ center: [lng, lat], zoom: ZOOM });
     }
-  }, [ready, place, lng, lat]);
+  }, [ready, pinLng, pinLat, lng, lat]);
 
   // A search result: go there (the user didn't tap it on the map, so it may be off-screen).
   const [focusLng, focusLat] = focus ?? [];

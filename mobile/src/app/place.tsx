@@ -43,6 +43,12 @@ export default function PlaceScreen() {
   const [allowed, setAllowed] = useState<boolean | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+
+  const place: LngLat | null = challenge?.place ? [challenge.place.lng, challenge.place.lat] : null;
+  const radius = challenge?.place?.radiusM ?? 150;
+  const away = place && here ? metresBetween(here, place) : null;
+  const arrived = away !== null && away <= radius;
+
   /** A spot tapped on the map (or found by search), waiting for "Pin here". */
   const [draft, setDraft] = useState<LngLat | null>(null);
   /** Where the map flies to (a search result). */
@@ -57,11 +63,6 @@ export default function PlaceScreen() {
     retry: false,
   });
   const doneToday = challenge?.progress.done === true;
-
-  const place: LngLat | null = challenge?.place ? [challenge.place.lng, challenge.place.lat] : null;
-  const radius = challenge?.place?.radiusM ?? 150;
-  const away = place && here ? metresBetween(here, place) : null;
-  const arrived = away !== null && away <= radius;
 
   // Follow the phone while this screen is open (foreground only).
   useEffect(() => {
